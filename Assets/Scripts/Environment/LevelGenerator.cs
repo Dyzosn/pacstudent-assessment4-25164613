@@ -373,4 +373,16 @@ public class LevelGenerator : MonoBehaviour
             newTile.name = $"Tile_{tileType}_R{position.y}_C{position.x}";
         }
     }
+
+    // Public method to access the level map for movement validation
+    public int[,] GetLevelMap()
+    {
+        // Return the appropriate map based on what's being used
+        if (generateNewMap && currentMap != null)
+        {
+            return currentMap;
+        }
+        // Default to standard levelMap for manual level
+        return levelMap;
+    }
 }
