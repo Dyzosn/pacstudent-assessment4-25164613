@@ -19,6 +19,12 @@ public class SceneController : MonoBehaviour
         // SceneManager.LoadScene("InnovationScene");
     }
 
+    // Return to start screen from gameplay
+    public void LoadStartScene()
+    {
+        SceneManager.LoadScene("StartScene");
+    }
+
     // Reload current scene
     public void ReloadCurrentScene()
     {
