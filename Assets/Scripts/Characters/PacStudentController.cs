@@ -10,6 +10,10 @@ public class PacStudentController : MonoBehaviour
 
     [Header("Audio")]
     [SerializeField] private AudioClip movementAudioClip;
+    [SerializeField] private AudioClip wallCollisionSFX;
+
+    [Header("Wall Collision")]
+    [SerializeField] private GameObject wallBumpParticlePrefab;
 
     private KeyCode lastInput;
     private KeyCode currentInput;
@@ -18,21 +22,43 @@ public class PacStudentController : MonoBehaviour
     private float lerpProgress = 0f;
 
     private Animator animator;
-    private AudioSource audioSource;
+    private AudioSource movementAudioSource;
+    private AudioSource sfxAudioSource;
     private ParticleSystem dustParticles;
 
-    // Grid conversion constants - adjust based on your level layout
+    // Grid conversion constants
     private const float GRID_SIZE = 1f;
     private Vector2Int currentGridPosition;
+
+    // Wall collision tracking
+    private Vector3 lastValidPosition;
+    private bool isColliding = false;
+    private bool wasBlocked = false;
 
     void Start()
     {
         // Get components
         animator = GetComponent<Animator>();
-        audioSource = GetComponent<AudioSource>();
+
+        // Get or create audio sources
+        AudioSource[] audioSources = GetComponents<AudioSource>();
+        if (audioSources.Length >= 1)
+        {
+            movementAudioSource = audioSources[0];
+        }
+        else
+        {
+            movementAudioSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        // Create separate AudioSource for sound effects to avoid conflicts
+        sfxAudioSource = gameObject.AddComponent<AudioSource>();
+        sfxAudioSource.playOnAwake = false;
+        sfxAudioSource.loop = false;
+
         dustParticles = GetComponentInChildren<ParticleSystem>();
 
-        // Find level generator
+        // Find level generator if not assigned
         if (levelGenerator == null)
         {
             levelGenerator = FindFirstObjectByType<LevelGenerator>();
@@ -41,6 +67,9 @@ public class PacStudentController : MonoBehaviour
         // Calculate starting grid position
         currentGridPosition = WorldToGrid(transform.position);
         targetPosition = transform.position;
+
+        // Store initial position as last valid
+        lastValidPosition = transform.position;
 
         // Initialise input - no movement at start
         lastInput = KeyCode.None;
@@ -54,7 +83,7 @@ public class PacStudentController : MonoBehaviour
         // Gather player input
         GatherInput();
 
-        // If not lerping, try to start new movement
+        // If not lerping, attempt to start new movement
         if (!isLerping)
         {
             TryMove();
@@ -72,18 +101,22 @@ public class PacStudentController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.W))
         {
             lastInput = KeyCode.W;
+            wasBlocked = false;
         }
         else if (Input.GetKeyDown(KeyCode.A))
         {
             lastInput = KeyCode.A;
+            wasBlocked = false;
         }
         else if (Input.GetKeyDown(KeyCode.S))
         {
             lastInput = KeyCode.S;
+            wasBlocked = false;
         }
         else if (Input.GetKeyDown(KeyCode.D))
         {
             lastInput = KeyCode.D;
+            wasBlocked = false;
         }
     }
 
@@ -104,8 +137,18 @@ public class PacStudentController : MonoBehaviour
                 currentGridPosition = nextGridPos;
                 StartLerp(GridToWorld(nextGridPos));
                 UpdateAnimationDirection(lastInput);
+                wasBlocked = false;
                 moved = true;
                 return;
+            }
+            else
+            {
+                // Hit wall with lastInput - trigger effects only on first frame
+                if (!wasBlocked)
+                {
+                    TriggerWallCollisionEffects(lastInput);
+                    wasBlocked = true;
+                }
             }
         }
 
@@ -120,12 +163,13 @@ public class PacStudentController : MonoBehaviour
                 currentGridPosition = nextGridPos;
                 StartLerp(GridToWorld(nextGridPos));
                 UpdateAnimationDirection(currentInput);
+                wasBlocked = false;
                 moved = true;
                 return;
             }
         }
 
-        // Both failed - stop moving (CRITICAL FIX)
+        // Both failed - stop moving
         if (!moved)
         {
             StopMovement();
@@ -137,6 +181,9 @@ public class PacStudentController : MonoBehaviour
         targetPosition = target;
         isLerping = true;
         lerpProgress = 0f;
+
+        // Store current position as last valid before moving
+        lastValidPosition = transform.position;
 
         // Start movement animation
         if (animator != null)
@@ -151,13 +198,13 @@ public class PacStudentController : MonoBehaviour
         }
 
         // Play movement audio (looping)
-        if (audioSource != null && movementAudioClip != null)
+        if (movementAudioSource != null && movementAudioClip != null)
         {
-            if (!audioSource.isPlaying)
+            if (!movementAudioSource.isPlaying)
             {
-                audioSource.clip = movementAudioClip;
-                audioSource.loop = true;
-                audioSource.Play();
+                movementAudioSource.clip = movementAudioClip;
+                movementAudioSource.loop = true;
+                movementAudioSource.Play();
             }
         }
     }
@@ -193,9 +240,9 @@ public class PacStudentController : MonoBehaviour
         }
 
         // Stop movement audio
-        if (audioSource != null && audioSource.isPlaying)
+        if (movementAudioSource != null && movementAudioSource.isPlaying)
         {
-            audioSource.Stop();
+            movementAudioSource.Stop();
         }
     }
 
@@ -204,7 +251,6 @@ public class PacStudentController : MonoBehaviour
         if (animator == null) return;
 
         // Set animator parameters based on direction
-        // Animation clips handle sprite direction, no need to rotate transform
         switch (direction)
         {
             case KeyCode.W:
@@ -220,6 +266,33 @@ public class PacStudentController : MonoBehaviour
                 animator.SetInteger("Direction", 3); // Right
                 break;
         }
+    }
+
+    void TriggerWallCollisionEffects(KeyCode direction)
+    {
+        // Calculate collision point based on direction
+        Vector3 collisionPoint = transform.position;
+        switch (direction)
+        {
+            case KeyCode.W: collisionPoint += Vector3.up * 0.5f; break;
+            case KeyCode.A: collisionPoint += Vector3.left * 0.5f; break;
+            case KeyCode.S: collisionPoint += Vector3.down * 0.5f; break;
+            case KeyCode.D: collisionPoint += Vector3.right * 0.5f; break;
+        }
+
+        // Play wall bump particle effect (plays once then destroys itself)
+        if (wallBumpParticlePrefab != null)
+        {
+            Instantiate(wallBumpParticlePrefab, collisionPoint, Quaternion.identity);
+        }
+
+        // Play wall collision sound effect
+        if (sfxAudioSource != null && wallCollisionSFX != null)
+        {
+            sfxAudioSource.PlayOneShot(wallCollisionSFX);
+        }
+
+        Debug.Log($"Wall collision effects triggered at {collisionPoint}");
     }
 
     Vector2Int GetNextGridPosition(Vector2Int current, KeyCode direction)
@@ -244,12 +317,6 @@ public class PacStudentController : MonoBehaviour
         int rows = levelMap.GetLength(0);
         int cols = levelMap.GetLength(1);
 
-        // Determine which quadrant the position is in
-        // Quadrant 1 (top-left): x: 0-13, y: 0-14
-        // Quadrant 2 (top-right): x: 14-27, y: 0-14
-        // Quadrant 3 (bottom-left): x: 0-13, y: 15-28
-        // Quadrant 4 (bottom-right): x: 14-27, y: 15-28
-
         int mappedX = gridPos.x;
         int mappedY = gridPos.y;
 
@@ -262,7 +329,7 @@ public class PacStudentController : MonoBehaviour
 
         if (gridPos.y >= rows)
         {
-            // Bottom half - mirror vertically (skip last row as per specs)
+            // Bottom half - mirror vertically
             mappedY = (rows * 2 - 2) - gridPos.y;
         }
 
@@ -281,7 +348,6 @@ public class PacStudentController : MonoBehaviour
     Vector2Int WorldToGrid(Vector3 worldPos)
     {
         // Manual level starts at world position (0.5, 9.5) for grid (0, 0)
-        // Each grid cell is 1 unit
         int gridX = Mathf.RoundToInt(worldPos.x - 0.5f);
         int gridY = Mathf.RoundToInt(9.5f - worldPos.y);
 
@@ -295,5 +361,48 @@ public class PacStudentController : MonoBehaviour
         float worldY = 9.5f - gridPos.y;
 
         return new Vector3(worldX, worldY, 0f);
+    }
+
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        // Check if collided with wall layer
+        if (collision.gameObject.layer == LayerMask.NameToLayer("Wall"))
+        {
+            // Prevent repeated collision responses
+            if (isColliding) return;
+            isColliding = true;
+
+            // Stop movement immediately
+            isLerping = false;
+            StopMovement();
+
+            // Snap back to last valid grid position
+            transform.position = lastValidPosition;
+            currentGridPosition = WorldToGrid(lastValidPosition);
+
+            // Play wall bump particle at collision point
+            if (wallBumpParticlePrefab != null && collision.contacts.Length > 0)
+            {
+                Vector3 contactPoint = collision.contacts[0].point;
+                Instantiate(wallBumpParticlePrefab, contactPoint, Quaternion.identity);
+            }
+
+            // Play wall collision sound effect
+            if (sfxAudioSource != null && wallCollisionSFX != null)
+            {
+                sfxAudioSource.PlayOneShot(wallCollisionSFX);
+            }
+
+            Debug.Log($"Physical wall collision detected! Reverted to position: {lastValidPosition}");
+        }
+    }
+
+    void OnCollisionExit2D(Collision2D collision)
+    {
+        // Reset collision flag when no longer touching wall
+        if (collision.gameObject.layer == LayerMask.NameToLayer("Wall"))
+        {
+            isColliding = false;
+        }
     }
 }
