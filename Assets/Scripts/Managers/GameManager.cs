@@ -22,12 +22,21 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject blockingImage;
     [SerializeField] private TextMeshProUGUI countdownText;
 
+    [Header("Game Over UI")]
+    [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private TextMeshProUGUI finalScoreText;
+    [SerializeField] private TextMeshProUGUI finalTimeText;
+    [SerializeField] private TextMeshProUGUI highScoreText;
+
     [Header("Ghost Timer UI")]
     [SerializeField] private GameObject ghostTimerContainer;
     [SerializeField] private TextMeshProUGUI ghostTimerText;
 
     [Header("Ghost Management")]
     [SerializeField] private AudioController audioController;
+
+    // PlayerPrefs key for high score
+    private const string HIGH_SCORE_KEY = "HighScore";
 
     // Ghost state enum
     public enum GhostState
@@ -47,6 +56,7 @@ public class GameManager : MonoBehaviour
     private bool isGameActive = false;
     private GameObject[] allGhosts;
     private int deadGhostCount = 0;
+    private int highScore = 0;
 
     void Awake()
     {
@@ -80,9 +90,18 @@ public class GameManager : MonoBehaviour
             ghostTimerContainer.SetActive(false);
         }
 
+        // Hide game over panel initially
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
+        // Load high score from PlayerPrefs
+        LoadHighScore();
+
         UpdateUI();
 
-        // Start countdown sequence instead of auto-starting game
+        // Start countdown sequence
         StartCoroutine(CountdownSequence());
     }
 
@@ -116,7 +135,7 @@ public class GameManager : MonoBehaviour
             countdownText.gameObject.SetActive(true);
         }
 
-        // Countdown: 3, 2, 1
+        // Countdown: 3, 2, 1, GO!
         string[] countdownNumbers = { "3", "2", "1", "GO!" };
 
         foreach (string number in countdownNumbers)
@@ -375,8 +394,65 @@ public class GameManager : MonoBehaviour
     void GameOver()
     {
         isGameActive = false;
-        Debug.Log("Game Over!");
-        // Full game over implementation later
+
+        // Check and save high score
+        if (currentScore > highScore)
+        {
+            highScore = currentScore;
+            SaveHighScore();
+            Debug.Log($"New high score! {highScore}");
+        }
+
+        // Show game over screen
+        ShowGameOverScreen();
+
+        Debug.Log($"Game Over! Final Score: {currentScore}, Time: {gameTime:F2}s");
+    }
+
+    void ShowGameOverScreen()
+    {
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(true);
+        }
+
+        // Update final score text
+        if (finalScoreText != null)
+        {
+            finalScoreText.text = $"Final Score: {currentScore.ToString("D6")}";
+        }
+
+        // Update final time text
+        if (finalTimeText != null)
+        {
+            int minutes = Mathf.FloorToInt(gameTime / 60f);
+            int seconds = Mathf.FloorToInt(gameTime % 60f);
+            int milliseconds = Mathf.FloorToInt((gameTime * 100f) % 100f);
+            finalTimeText.text = $"Time: {minutes:D2}:{seconds:D2}:{milliseconds:D2}";
+        }
+
+        // Update high score text
+        if (highScoreText != null)
+        {
+            highScoreText.text = $"High Score: {highScore.ToString("D6")}";
+        }
+
+        Debug.Log("Game Over screen displayed");
+    }
+
+    void LoadHighScore()
+    {
+        // Load high score from PlayerPrefs (default to 0 if not found)
+        highScore = PlayerPrefs.GetInt(HIGH_SCORE_KEY, 0);
+        Debug.Log($"Loaded high score: {highScore}");
+    }
+
+    void SaveHighScore()
+    {
+        // Save high score to PlayerPrefs
+        PlayerPrefs.SetInt(HIGH_SCORE_KEY, highScore);
+        PlayerPrefs.Save(); // Force save to disk
+        Debug.Log($"Saved high score: {highScore}");
     }
 
     void UpdateUI()
