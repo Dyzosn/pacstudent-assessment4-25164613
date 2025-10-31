@@ -38282,7 +38282,10 @@ MonoBehaviour:
   movementAudioClip: {fileID: 8300000, guid: 0375aeb2fc8b7fb40b81f19636c76c15, type: 3}
   wallCollisionSFX: {fileID: 8300000, guid: 293a0f0c182f9fa4a9e82168933f6469, type: 3}
   pelletEatSFX: {fileID: 8300000, guid: 14167ed4284c06042830c6dede29187d, type: 3}
+  deathSFX: {fileID: 8300000, guid: 0c123cf4b66a95c41979f31342ab482b, type: 3}
   wallBumpParticlePrefab: {fileID: 6681991650771033921, guid: ab4e97b68d4574d4d8ff6392bccb2830, type: 3}
+  deathParticlePrefab: {fileID: 4632920576717634505, guid: ee665dc0d6684d5458fcfbb8fead816b, type: 3}
+  deathAnimationDuration: 2
 --- !u!50 &1809631753
 Rigidbody2D:
   serializedVersion: 4
@@ -49741,6 +49744,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1768463985}
     m_Modifications:
+    - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
+      propertyPath: initialPosition.x
+      value: 14.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
+      propertyPath: initialPosition.y
+      value: -4.5
+      objectReference: {fileID: 0}
     - target: {fileID: 2998978183299908249, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
       propertyPath: m_LocalPosition.x
       value: 14.5
@@ -49804,7 +49815,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2770055685779004522, guid: a59fd978c39e35a408464559054e044f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -4.5
+      value: -1.5
       objectReference: {fileID: 0}
     - target: {fileID: 2770055685779004522, guid: a59fd978c39e35a408464559054e044f, type: 3}
       propertyPath: m_LocalPosition.z
@@ -49838,6 +49849,26 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: initialPosition.x
+      value: 15.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: initialPosition.y
+      value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: manualInitialPosition.x
+      value: 15.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: manualInitialPosition.y
+      value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: useCurrentPositionAsInitial
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8987859771344651937, guid: a59fd978c39e35a408464559054e044f, type: 3}
       propertyPath: m_Name
       value: OrangeDrone
@@ -49855,6 +49886,26 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1768463985}
     m_Modifications:
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: initialPosition.x
+      value: 12.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: initialPosition.y
+      value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: manualInitialPosition.x
+      value: 12.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: manualInitialPosition.y
+      value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: useCurrentPositionAsInitial
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7208310012751262618, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
       propertyPath: m_Name
       value: RedDrone
@@ -49865,7 +49916,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8280155048088821070, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -4.5
+      value: -1.5
       objectReference: {fileID: 0}
     - target: {fileID: 8280155048088821070, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
       propertyPath: m_LocalPosition.z
@@ -49951,6 +50002,14 @@ PrefabInstance:
     - target: {fileID: 2038108108129433991, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
+      propertyPath: initialPosition.x
+      value: 13.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
+      propertyPath: initialPosition.y
+      value: -4.5
       objectReference: {fileID: 0}
     - target: {fileID: 6009665021506178022, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
       propertyPath: m_Name

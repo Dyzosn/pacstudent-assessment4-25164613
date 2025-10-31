@@ -36,10 +36,11 @@ public class GameManager : MonoBehaviour
     private bool isGhostScaredActive = false;
     private float ghostScaredTimer = 0f;
     private const float GHOST_SCARED_DURATION = 10f;
-    private const float RECOVERING_THRESHOLD = 3f; // 3 seconds left = recovering
+    private const float RECOVERING_THRESHOLD = 3f;
 
     private bool isGameActive = false;
     private GameObject[] allGhosts;
+    private int deadGhostCount = 0;
 
     void Awake()
     {
@@ -119,6 +120,84 @@ public class GameManager : MonoBehaviour
         gameTime = 0f;
     }
 
+    public void PacStudentDeath()
+    {
+        // PacStudent has died - lose a life
+        LoseLife();
+
+        Debug.Log($"PacStudent died! Lives remaining: {currentLives}");
+
+        // Death sequence will be handled by PacStudentController
+        // After death animation finishes, it will call RespawnAll()
+    }
+
+    public void RespawnAll()
+    {
+        // Reset all ghosts to initial positions and normal state
+        foreach (GameObject ghost in allGhosts)
+        {
+            if (ghost != null)
+            {
+                GhostController ghostController = ghost.GetComponent<GhostController>();
+                if (ghostController != null)
+                {
+                    ghostController.ResetToInitialPosition();
+                }
+            }
+        }
+
+        // End scared mode if active
+        if (isGhostScaredActive)
+        {
+            EndGhostScaredMode();
+        }
+
+        Debug.Log("All entities respawned to initial positions");
+    }
+
+    public void OnGhostDeath()
+    {
+        // Called when a ghost is eaten by PacStudent
+        deadGhostCount++;
+
+        // Add score
+        AddScore(300);
+
+        // Switch to dead music if not already playing
+        if (audioController != null)
+        {
+            audioController.SwitchToDeadMusic();
+        }
+
+        Debug.Log($"Ghost eaten! +300 points. Dead ghosts: {deadGhostCount}");
+    }
+
+    public void OnGhostRespawn()
+    {
+        // Called when a dead ghost respawns
+        deadGhostCount--;
+
+        // If no more dead ghosts, return music to appropriate state
+        if (deadGhostCount <= 0)
+        {
+            deadGhostCount = 0;
+
+            if (audioController != null)
+            {
+                if (isGhostScaredActive)
+                {
+                    audioController.SwitchToScaredMusic();
+                }
+                else
+                {
+                    audioController.SwitchToNormalMusic();
+                }
+            }
+        }
+
+        Debug.Log($"Ghost respawned. Dead ghosts remaining: {deadGhostCount}");
+    }
+
     public void StartGhostScaredMode()
     {
         // Start 10 second scared timer
@@ -134,8 +213,8 @@ public class GameManager : MonoBehaviour
         // Set all ghosts to scared state
         SetAllGhostsState(GhostState.Scared);
 
-        // Change music to scared state
-        if (audioController != null)
+        // Change music to scared state (unless ghost is dead)
+        if (audioController != null && deadGhostCount == 0)
         {
             audioController.SwitchToScaredMusic();
         }
@@ -182,8 +261,8 @@ public class GameManager : MonoBehaviour
         // Set all non-dead ghosts back to normal
         SetAllGhostsStateExceptDead(GhostState.Normal);
 
-        // Change music back to normal
-        if (audioController != null)
+        // Change music back to normal (unless ghost is dead)
+        if (audioController != null && deadGhostCount == 0)
         {
             audioController.SwitchToNormalMusic();
         }
@@ -218,12 +297,11 @@ public class GameManager : MonoBehaviour
         {
             if (ghost != null)
             {
-                Animator animator = ghost.GetComponent<Animator>();
-                if (animator != null)
+                GhostController ghostController = ghost.GetComponent<GhostController>();
+                if (ghostController != null && !ghostController.IsDead())
                 {
-                    // Only change state if not dead
-                    int currentState = animator.GetInteger("GhostState");
-                    if (currentState != (int)GhostState.Dead)
+                    Animator animator = ghost.GetComponent<Animator>();
+                    if (animator != null)
                     {
                         animator.SetInteger("GhostState", (int)newState);
                     }
@@ -286,4 +364,6 @@ public class GameManager : MonoBehaviour
     public float GetGameTime() => gameTime;
     public bool IsGameActive() => isGameActive;
     public GhostState GetCurrentGhostState() => currentGhostState;
+    public bool IsGhostScaredActive() => isGhostScaredActive;
+    public float GetGhostScaredTimeRemaining() => ghostScaredTimer;
 }

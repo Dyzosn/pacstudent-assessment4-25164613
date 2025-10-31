@@ -251,6 +251,7 @@ GameObject:
   - component: {fileID: 4038310324786039455}
   - component: {fileID: 5203601397924323360}
   - component: {fileID: 2543100358135504969}
+  - component: {fileID: 2748549743494596869}
   m_Layer: 0
   m_Name: BlueDrone
   m_TagString: Ghost
@@ -413,3 +414,17 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
+--- !u!114 &2748549743494596869
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6009665021506178022}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f0b2032a98a9714083bc2bd69452459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  initialPosition: {x: 0, y: 0, z: 0}
+  initialRotation: {x: 0, y: 0, z: 0, w: 0}

@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class PacStudentController : MonoBehaviour
 {
@@ -12,9 +13,14 @@ public class PacStudentController : MonoBehaviour
     [SerializeField] private AudioClip movementAudioClip;
     [SerializeField] private AudioClip wallCollisionSFX;
     [SerializeField] private AudioClip pelletEatSFX;
+    [SerializeField] private AudioClip deathSFX;
 
     [Header("Wall Collision")]
     [SerializeField] private GameObject wallBumpParticlePrefab;
+
+    [Header("Death")]
+    [SerializeField] private GameObject deathParticlePrefab;
+    [SerializeField] private float deathAnimationDuration = 2f;
 
     private KeyCode lastInput;
     private KeyCode currentInput;
@@ -30,11 +36,16 @@ public class PacStudentController : MonoBehaviour
     // Grid conversion constants
     private const float GRID_SIZE = 1f;
     private Vector2Int currentGridPosition;
+    private Vector3 initialPosition;
 
     // Wall collision tracking
     private Vector3 lastValidPosition;
     private bool isColliding = false;
     private bool wasBlocked = false;
+
+    // Death state
+    private bool isDead = false;
+    private bool canMove = true;
 
     void Start()
     {
@@ -52,7 +63,7 @@ public class PacStudentController : MonoBehaviour
             movementAudioSource = gameObject.AddComponent<AudioSource>();
         }
 
-        // Create separate AudioSource for sound effects to avoid conflicts
+        // Create separate AudioSource for sound effects
         sfxAudioSource = gameObject.AddComponent<AudioSource>();
         sfxAudioSource.playOnAwake = false;
         sfxAudioSource.loop = false;
@@ -65,6 +76,9 @@ public class PacStudentController : MonoBehaviour
             levelGenerator = FindFirstObjectByType<LevelGenerator>();
         }
 
+        // Store initial position for respawn
+        initialPosition = transform.position;
+
         // Calculate starting grid position
         currentGridPosition = WorldToGrid(transform.position);
         targetPosition = transform.position;
@@ -72,7 +86,7 @@ public class PacStudentController : MonoBehaviour
         // Store initial position as last valid
         lastValidPosition = transform.position;
 
-        // Initialise input - no movement at start
+        // Initialise input
         lastInput = KeyCode.None;
         currentInput = KeyCode.None;
 
@@ -81,6 +95,9 @@ public class PacStudentController : MonoBehaviour
 
     void Update()
     {
+        // Skip update if dead
+        if (isDead || !canMove) return;
+
         // Gather player input
         GatherInput();
 
@@ -98,7 +115,7 @@ public class PacStudentController : MonoBehaviour
 
     void GatherInput()
     {
-        // Store last pressed key - only update if new input detected
+        // Store last pressed key
         if (Input.GetKeyDown(KeyCode.W))
         {
             lastInput = KeyCode.W;
@@ -133,7 +150,6 @@ public class PacStudentController : MonoBehaviour
 
             if (IsWalkable(nextGridPos))
             {
-                // lastInput is valid - use it
                 currentInput = lastInput;
                 currentGridPosition = nextGridPos;
                 StartLerp(GridToWorld(nextGridPos));
@@ -144,7 +160,6 @@ public class PacStudentController : MonoBehaviour
             }
             else
             {
-                // Hit wall with lastInput - trigger effects only on first frame
                 if (!wasBlocked)
                 {
                     TriggerWallCollisionEffects(lastInput);
@@ -160,7 +175,6 @@ public class PacStudentController : MonoBehaviour
 
             if (IsWalkable(nextGridPos))
             {
-                // currentInput is valid - continue in same direction
                 currentGridPosition = nextGridPos;
                 StartLerp(GridToWorld(nextGridPos));
                 UpdateAnimationDirection(currentInput);
@@ -182,23 +196,18 @@ public class PacStudentController : MonoBehaviour
         targetPosition = target;
         isLerping = true;
         lerpProgress = 0f;
-
-        // Store current position as last valid before moving
         lastValidPosition = transform.position;
 
-        // Start movement animation
         if (animator != null)
         {
             animator.SetBool("IsMoving", true);
         }
 
-        // Start dust particles
         if (dustParticles != null && !dustParticles.isPlaying)
         {
             dustParticles.Play();
         }
 
-        // Play movement audio (looping)
         if (movementAudioSource != null && movementAudioClip != null)
         {
             if (!movementAudioSource.isPlaying)
@@ -212,12 +221,9 @@ public class PacStudentController : MonoBehaviour
 
     void PerformLerp()
     {
-        // Frame-rate independent lerping
         lerpProgress += moveSpeed * Time.deltaTime;
-
         transform.position = Vector3.Lerp(transform.position, targetPosition, lerpProgress);
 
-        // Check if reached target
         if (lerpProgress >= 1f)
         {
             transform.position = targetPosition;
@@ -240,7 +246,6 @@ public class PacStudentController : MonoBehaviour
             dustParticles.Stop();
         }
 
-        // Stop movement audio
         if (movementAudioSource != null && movementAudioSource.isPlaying)
         {
             movementAudioSource.Stop();
@@ -251,27 +256,25 @@ public class PacStudentController : MonoBehaviour
     {
         if (animator == null) return;
 
-        // Set animator parameters based on direction
         switch (direction)
         {
             case KeyCode.W:
-                animator.SetInteger("Direction", 0); // Up
+                animator.SetInteger("Direction", 0);
                 break;
             case KeyCode.A:
-                animator.SetInteger("Direction", 1); // Left
+                animator.SetInteger("Direction", 1);
                 break;
             case KeyCode.S:
-                animator.SetInteger("Direction", 2); // Down
+                animator.SetInteger("Direction", 2);
                 break;
             case KeyCode.D:
-                animator.SetInteger("Direction", 3); // Right
+                animator.SetInteger("Direction", 3);
                 break;
         }
     }
 
     void TriggerWallCollisionEffects(KeyCode direction)
     {
-        // Calculate collision point based on direction
         Vector3 collisionPoint = transform.position;
         switch (direction)
         {
@@ -281,30 +284,98 @@ public class PacStudentController : MonoBehaviour
             case KeyCode.D: collisionPoint += Vector3.right * 0.5f; break;
         }
 
-        // Play wall bump particle effect (plays once then destroys itself)
         if (wallBumpParticlePrefab != null)
         {
             Instantiate(wallBumpParticlePrefab, collisionPoint, Quaternion.identity);
         }
 
-        // Play wall collision sound effect
         if (sfxAudioSource != null && wallCollisionSFX != null)
         {
             sfxAudioSource.PlayOneShot(wallCollisionSFX);
         }
+    }
 
-        Debug.Log($"Wall collision effects triggered at {collisionPoint}");
+    IEnumerator DeathSequence()
+    {
+        isDead = true;
+        canMove = false;
+
+        // Stop movement
+        StopMovement();
+
+        // Play death animation
+        if (animator != null)
+        {
+            animator.SetTrigger("Die");
+        }
+
+        // Play death particle effect
+        if (deathParticlePrefab != null)
+        {
+            Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
+        }
+
+        // Play death sound effect
+        if (sfxAudioSource != null && deathSFX != null)
+        {
+            sfxAudioSource.PlayOneShot(deathSFX);
+        }
+
+        Debug.Log("PacStudent death sequence started");
+
+        // Wait for death animation to finish
+        yield return new WaitForSeconds(deathAnimationDuration);
+
+        // Check if game over
+        if (GameManager.Instance != null && GameManager.Instance.GetLives() <= 0)
+        {
+            Debug.Log("Game Over - no lives remaining");
+            yield break;
+        }
+
+        // Respawn
+        Respawn();
+    }
+
+    void Respawn()
+    {
+        // Reset position to initial spawn
+        transform.position = initialPosition;
+        currentGridPosition = WorldToGrid(initialPosition);
+        targetPosition = initialPosition;
+        lastValidPosition = initialPosition;
+
+        // Reset input
+        lastInput = KeyCode.None;
+        currentInput = KeyCode.None;
+
+        // Reset animator
+        if (animator != null)
+        {
+            animator.SetBool("IsMoving", false);
+        }
+
+        // Reset death state
+        isDead = false;
+        canMove = true;
+
+        // Tell GameManager to respawn all ghosts
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.RespawnAll();
+        }
+
+        Debug.Log("PacStudent respawned at initial position");
     }
 
     Vector2Int GetNextGridPosition(Vector2Int current, KeyCode direction)
     {
-        // Grid coordinates: (0,0) is top-left, x+ is right, y+ is DOWN
         switch (direction)
         {
-            case KeyCode.W: return new Vector2Int(current.x, current.y - 1); // Up (y decreases)
-            case KeyCode.A: return new Vector2Int(current.x - 1, current.y); // Left
-            case KeyCode.S: return new Vector2Int(current.x, current.y + 1); // Down (y increases)
-            case KeyCode.D: return new Vector2Int(current.x + 1, current.y); // Right
+            case KeyCode.W: return new Vector2Int(current.x, current.y - 1);
+            case KeyCode.A: return new Vector2Int(current.x - 1, current.y);
+            case KeyCode.S: return new Vector2Int(current.x, current.y + 1);
+            case KeyCode.D: return new Vector2Int(current.x + 1, current.y);
             default: return current;
         }
     }
@@ -313,7 +384,6 @@ public class PacStudentController : MonoBehaviour
     {
         if (levelGenerator == null) return false;
 
-        // Get base level map (quadrant 1 only)
         int[,] levelMap = levelGenerator.GetLevelMap();
         int rows = levelMap.GetLength(0);
         int cols = levelMap.GetLength(1);
@@ -321,86 +391,67 @@ public class PacStudentController : MonoBehaviour
         int mappedX = gridPos.x;
         int mappedY = gridPos.y;
 
-        // Map to quadrant 1 coordinates
         if (gridPos.x >= cols)
         {
-            // Right half - mirror horizontally
             mappedX = (cols * 2 - 1) - gridPos.x;
         }
 
         if (gridPos.y >= rows)
         {
-            // Bottom half - mirror vertically
             mappedY = (rows * 2 - 2) - gridPos.y;
         }
 
-        // Check bounds in quadrant 1
         if (mappedX < 0 || mappedX >= cols || mappedY < 0 || mappedY >= rows)
         {
-            return false; // Out of bounds
+            return false;
         }
 
         int tileType = levelMap[mappedY, mappedX];
-
-        // Walkable tiles: 0 (empty), 5 (pellet), 6 (power pellet)
         return tileType == 0 || tileType == 5 || tileType == 6;
     }
 
     Vector2Int WorldToGrid(Vector3 worldPos)
     {
-        // Manual level starts at world position (0.5, 9.5) for grid (0, 0)
         int gridX = Mathf.RoundToInt(worldPos.x - 0.5f);
         int gridY = Mathf.RoundToInt(9.5f - worldPos.y);
-
         return new Vector2Int(gridX, gridY);
     }
 
     Vector3 GridToWorld(Vector2Int gridPos)
     {
-        // Convert grid coordinates back to world position
         float worldX = gridPos.x + 0.5f;
         float worldY = 9.5f - gridPos.y;
-
         return new Vector3(worldX, worldY, 0f);
     }
 
     void OnCollisionEnter2D(Collision2D collision)
     {
-        // Check if collided with wall layer
         if (collision.gameObject.layer == LayerMask.NameToLayer("Wall"))
         {
-            // Prevent repeated collision responses
             if (isColliding) return;
             isColliding = true;
 
-            // Stop movement immediately
             isLerping = false;
             StopMovement();
 
-            // Snap back to last valid grid position
             transform.position = lastValidPosition;
             currentGridPosition = WorldToGrid(lastValidPosition);
 
-            // Play wall bump particle at collision point
             if (wallBumpParticlePrefab != null && collision.contacts.Length > 0)
             {
                 Vector3 contactPoint = collision.contacts[0].point;
                 Instantiate(wallBumpParticlePrefab, contactPoint, Quaternion.identity);
             }
 
-            // Play wall collision sound effect
             if (sfxAudioSource != null && wallCollisionSFX != null)
             {
                 sfxAudioSource.PlayOneShot(wallCollisionSFX);
             }
-
-            Debug.Log($"Physical wall collision detected! Reverted to position: {lastValidPosition}");
         }
     }
 
     void OnCollisionExit2D(Collision2D collision)
     {
-        // Reset collision flag when no longer touching wall
         if (collision.gameObject.layer == LayerMask.NameToLayer("Wall"))
         {
             isColliding = false;
@@ -409,18 +460,19 @@ public class PacStudentController : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D other)
     {
+        // Skip if dead
+        if (isDead) return;
+
         // Handle pellet collection
         if (other.CompareTag("Pellet"))
         {
             Destroy(other.gameObject);
 
-            // Add score via GameManager
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.AddScore(10);
             }
 
-            // Play eating sound effect
             if (sfxAudioSource != null && pelletEatSFX != null)
             {
                 sfxAudioSource.PlayOneShot(pelletEatSFX);
@@ -445,7 +497,7 @@ public class PacStudentController : MonoBehaviour
                 sfxAudioSource.PlayOneShot(pelletEatSFX);
             }
 
-            Debug.Log("Power pellet collected! +50 points - Ghost scared mode activated!");
+            Debug.Log("Power pellet collected! +50 points");
         }
 
         // Handle bonus cherry collection
@@ -464,6 +516,37 @@ public class PacStudentController : MonoBehaviour
             }
 
             Debug.Log("Bonus cherry collected! +100 points");
+        }
+
+        // Handle ghost collision
+        else if (other.CompareTag("Ghost"))
+        {
+            GhostController ghostController = other.GetComponent<GhostController>();
+            if (ghostController != null)
+            {
+                GameManager.GhostState ghostState = ghostController.GetCurrentState();
+
+                // Check ghost state
+                if (ghostState == GameManager.GhostState.Normal)
+                {
+                    // Normal ghost - PacStudent dies
+                    if (GameManager.Instance != null)
+                    {
+                        GameManager.Instance.PacStudentDeath();
+                    }
+
+                    StartCoroutine(DeathSequence());
+                    Debug.Log("Collided with normal ghost - PacStudent dies!");
+                }
+                else if (ghostState == GameManager.GhostState.Scared ||
+                         ghostState == GameManager.GhostState.Recovering)
+                {
+                    // Scared/Recovering ghost - Ghost dies
+                    ghostController.Die();
+                    Debug.Log("Ate scared/recovering ghost! +300 points");
+                }
+                // Dead ghost - no collision effect
+            }
         }
     }
 }

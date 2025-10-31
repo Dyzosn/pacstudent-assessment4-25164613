@@ -149,6 +149,7 @@ GameObject:
   - component: {fileID: 7682705455489539112}
   - component: {fileID: 975906316756638510}
   - component: {fileID: 8777223199545225074}
+  - component: {fileID: 1571429446392241273}
   m_Layer: 0
   m_Name: PinkDrone
   m_TagString: Ghost
@@ -311,6 +312,20 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
+--- !u!114 &1571429446392241273
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5750664814227762619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f0b2032a98a9714083bc2bd69452459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  initialPosition: {x: 0, y: 0, z: 0}
+  initialRotation: {x: 0, y: 0, z: 0, w: 0}
 --- !u!1 &6811532183411249979
 GameObject:
   m_ObjectHideFlags: 0
