@@ -49,7 +49,7 @@ public class AudioController : MonoBehaviour
                 if (!audioSource.isPlaying)
                 {
                     Debug.Log("Intro finished naturally after " + timeElapsed + " seconds");
-                    SwitchToNormalMusic();
+                    StartNormalMusic();
                 }
             }
             else
@@ -57,9 +57,25 @@ public class AudioController : MonoBehaviour
                 if (timeElapsed >= 3.0f)
                 {
                     Debug.Log("Cutting intro at 3 seconds");
-                    SwitchToNormalMusic();
+                    StartNormalMusic();
                 }
             }
+        }
+    }
+
+    public void StartNormalMusic()
+    {
+        if (normalStateMusic != null)
+        {
+            audioSource.Stop();
+            audioSource.clip = normalStateMusic;
+            audioSource.loop = true;
+            audioSource.Play();
+            switchedToNormal = true;
+            isIntroPhase = false;
+            isManuallyControlled = false;
+
+            Debug.Log("Now playing normal state music");
         }
     }
 
@@ -73,9 +89,9 @@ public class AudioController : MonoBehaviour
             audioSource.Play();
             switchedToNormal = true;
             isIntroPhase = false;
-            isManuallyControlled = false; // Allow auto transitions again
+            isManuallyControlled = false;
 
-            Debug.Log("Now playing normal state music");
+            Debug.Log("Switched to normal state music");
         }
     }
 
@@ -87,7 +103,7 @@ public class AudioController : MonoBehaviour
             audioSource.clip = scaredStateMusic;
             audioSource.loop = true;
             audioSource.Play();
-            isManuallyControlled = true; // Stop auto intro transitions
+            isManuallyControlled = true;
 
             Debug.Log("Switched to scared state music");
         }
@@ -101,7 +117,7 @@ public class AudioController : MonoBehaviour
             audioSource.clip = deadStateMusic;
             audioSource.loop = true;
             audioSource.Play();
-            isManuallyControlled = true; // Stop auto intro transitions
+            isManuallyControlled = true;
 
             Debug.Log("Switched to dead state music");
         }

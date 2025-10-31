@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
@@ -15,6 +17,10 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI scoreText;
     [SerializeField] private GameObject[] lifeIcons;
     [SerializeField] private TextMeshProUGUI timerText;
+
+    [Header("Countdown UI")]
+    [SerializeField] private GameObject blockingImage;
+    [SerializeField] private TextMeshProUGUI countdownText;
 
     [Header("Ghost Timer UI")]
     [SerializeField] private GameObject ghostTimerContainer;
@@ -76,9 +82,8 @@ public class GameManager : MonoBehaviour
 
         UpdateUI();
 
-        // TEMPORARY: Auto-start game for testing
-        StartGame();
-        Debug.Log("Game started automatically (temporary for testing)");
+        // Start countdown sequence instead of auto-starting game
+        StartCoroutine(CountdownSequence());
     }
 
     void Update()
@@ -95,6 +100,53 @@ public class GameManager : MonoBehaviour
         {
             UpdateGhostScaredTimer();
         }
+    }
+
+    IEnumerator CountdownSequence()
+    {
+        // Show blocking image
+        if (blockingImage != null)
+        {
+            blockingImage.SetActive(true);
+        }
+
+        // Show countdown text
+        if (countdownText != null)
+        {
+            countdownText.gameObject.SetActive(true);
+        }
+
+        // Countdown: 3, 2, 1
+        string[] countdownNumbers = { "3", "2", "1", "GO!" };
+
+        foreach (string number in countdownNumbers)
+        {
+            if (countdownText != null)
+            {
+                countdownText.text = number;
+            }
+
+            Debug.Log($"Countdown: {number}");
+
+            // Wait 1 second
+            yield return new WaitForSeconds(1f);
+        }
+
+        // Hide countdown UI
+        if (countdownText != null)
+        {
+            countdownText.gameObject.SetActive(false);
+        }
+
+        if (blockingImage != null)
+        {
+            blockingImage.SetActive(false);
+        }
+
+        // Start game
+        StartGame();
+
+        Debug.Log("Countdown finished - game started!");
     }
 
     public void AddScore(int points)
@@ -118,6 +170,14 @@ public class GameManager : MonoBehaviour
     {
         isGameActive = true;
         gameTime = 0f;
+
+        // Start normal music
+        if (audioController != null)
+        {
+            audioController.StartNormalMusic();
+        }
+
+        Debug.Log("Game active - player can now move");
     }
 
     public void PacStudentDeath()

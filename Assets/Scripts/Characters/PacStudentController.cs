@@ -95,8 +95,14 @@ public class PacStudentController : MonoBehaviour
 
     void Update()
     {
-        // Skip update if dead
+        // Skip update if dead or game not active
         if (isDead || !canMove) return;
+
+        // Check if game is active before allowing movement
+        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive())
+        {
+            return; // Game not started yet (countdown phase)
+        }
 
         // Gather player input
         GatherInput();
@@ -331,7 +337,7 @@ public class PacStudentController : MonoBehaviour
             transform.position = GridToWorld(gridPos);
             currentGridPosition = gridPos;
             targetPosition = transform.position;
-
+            
             Debug.Log($"Teleported from left edge to right edge at grid: {gridPos}");
             return true;
         }
@@ -344,7 +350,7 @@ public class PacStudentController : MonoBehaviour
             transform.position = GridToWorld(gridPos);
             currentGridPosition = gridPos;
             targetPosition = transform.position;
-
+            
             Debug.Log($"Teleported from right edge to left edge at grid: {gridPos}");
             return true;
         }
@@ -595,7 +601,7 @@ public class PacStudentController : MonoBehaviour
                     StartCoroutine(DeathSequence());
                     Debug.Log("Collided with normal ghost - PacStudent dies!");
                 }
-                else if (ghostState == GameManager.GhostState.Scared ||
+                else if (ghostState == GameManager.GhostState.Scared || 
                          ghostState == GameManager.GhostState.Recovering)
                 {
                     // Scared/Recovering ghost - Ghost dies
