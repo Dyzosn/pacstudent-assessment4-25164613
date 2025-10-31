@@ -2,26 +2,24 @@ using UnityEngine;
 
 public class AudioController : MonoBehaviour
 {
-    // Music clips
+    [Header("Music Clips")]
     public AudioClip introMusic;
     public AudioClip normalStateMusic;
+    public AudioClip scaredStateMusic;
+    public AudioClip deadStateMusic;
 
-    // Option to let intro play fully instead of cutting at 3 seconds
-    // I make this because of assignment specs concerns that say "when that audio clip either finishes or 3 seconds has elapsed (whichever is earliest)"
-    // Default: follow specs (3 second cut), but you should try the uncutted version to hear the proper transition.
+    [Header("Settings")]
     public bool letIntroFinish = false;
 
-    AudioSource audioSource;
-
-    float startTime;
-    bool switchedToNormal = false;
+    private AudioSource audioSource;
+    private float startTime;
+    private bool switchedToNormal = false;
+    private bool isIntroPhase = true;
+    private bool isManuallyControlled = false;
 
     void Start()
     {
-        // Get the audio source
         audioSource = GetComponent<AudioSource>();
-
-        // Record start time
         startTime = Time.time;
 
         // Start playing intro music
@@ -32,7 +30,6 @@ public class AudioController : MonoBehaviour
             audioSource.Play();
 
             Debug.Log("Started intro music - duration: " + introMusic.length + " seconds");
-            Debug.Log("Let intro finish: " + letIntroFinish);
         }
         else
         {
@@ -42,14 +39,13 @@ public class AudioController : MonoBehaviour
 
     void Update()
     {
-        // Only check if we haven't switched yet
-        if (!switchedToNormal && audioSource != null)
+        // Only handle intro transition if not manually controlled
+        if (isIntroPhase && !switchedToNormal && !isManuallyControlled && audioSource != null)
         {
             float timeElapsed = Time.time - startTime;
 
             if (letIntroFinish)
             {
-                // Wait for intro to finish naturally
                 if (!audioSource.isPlaying)
                 {
                     Debug.Log("Intro finished naturally after " + timeElapsed + " seconds");
@@ -58,7 +54,6 @@ public class AudioController : MonoBehaviour
             }
             else
             {
-                // Follow specs (cut at 3 seconds)
                 if (timeElapsed >= 3.0f)
                 {
                     Debug.Log("Cutting intro at 3 seconds");
@@ -68,20 +63,47 @@ public class AudioController : MonoBehaviour
         }
     }
 
-    void SwitchToNormalMusic()
+    public void SwitchToNormalMusic()
     {
-        if (normalStateMusic != null && !switchedToNormal)
+        if (normalStateMusic != null)
         {
-            // Stop current audio first
             audioSource.Stop();
-
-            // Switch to normal music
             audioSource.clip = normalStateMusic;
             audioSource.loop = true;
             audioSource.Play();
             switchedToNormal = true;
+            isIntroPhase = false;
+            isManuallyControlled = false; // Allow auto transitions again
 
             Debug.Log("Now playing normal state music");
+        }
+    }
+
+    public void SwitchToScaredMusic()
+    {
+        if (scaredStateMusic != null)
+        {
+            audioSource.Stop();
+            audioSource.clip = scaredStateMusic;
+            audioSource.loop = true;
+            audioSource.Play();
+            isManuallyControlled = true; // Stop auto intro transitions
+
+            Debug.Log("Switched to scared state music");
+        }
+    }
+
+    public void SwitchToDeadMusic()
+    {
+        if (deadStateMusic != null)
+        {
+            audioSource.Stop();
+            audioSource.clip = deadStateMusic;
+            audioSource.loop = true;
+            audioSource.Play();
+            isManuallyControlled = true; // Stop auto intro transitions
+
+            Debug.Log("Switched to dead state music");
         }
     }
 }

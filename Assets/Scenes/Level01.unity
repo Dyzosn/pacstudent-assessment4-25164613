@@ -1652,7 +1652,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &65219313
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8117,6 +8117,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   introMusic: {fileID: 8300000, guid: 4665ba3971fd69845962b65e26758da4, type: 3}
   normalStateMusic: {fileID: 8300000, guid: d81d4060a1ce30642ae03f9d4e462ac1, type: 3}
+  scaredStateMusic: {fileID: 8300000, guid: 4005dbcbd2c934349be19a1164d890ba, type: 3}
+  deadStateMusic: {fileID: 8300000, guid: 3020f1ccf2610464887afda9c436e462, type: 3}
   letIntroFinish: 0
 --- !u!82 &388215518
 AudioSource:
@@ -20931,6 +20933,9 @@ MonoBehaviour:
   - {fileID: 1867149037}
   - {fileID: 723656867}
   timerText: {fileID: 1012390165}
+  ghostTimerContainer: {fileID: 65219312}
+  ghostTimerText: {fileID: 1684788438}
+  audioController: {fileID: 388215517}
 --- !u!1001 &1009045941
 PrefabInstance:
   m_ObjectHideFlags: 0

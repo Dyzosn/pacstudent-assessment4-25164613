@@ -429,7 +429,7 @@ public class PacStudentController : MonoBehaviour
             Debug.Log("Pellet collected! +10 points");
         }
 
-        // Handle power pellet collection (basic handling - full implementation in Section 4)
+        // Handle power pellet collection
         else if (other.CompareTag("PowerPellet"))
         {
             Destroy(other.gameObject);
@@ -437,6 +437,7 @@ public class PacStudentController : MonoBehaviour
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.AddScore(50);
+                GameManager.Instance.StartGhostScaredMode();
             }
 
             if (sfxAudioSource != null && pelletEatSFX != null)
@@ -444,7 +445,7 @@ public class PacStudentController : MonoBehaviour
                 sfxAudioSource.PlayOneShot(pelletEatSFX);
             }
 
-            Debug.Log("Power pellet collected! +50 points (basic handling)");
+            Debug.Log("Power pellet collected! +50 points - Ghost scared mode activated!");
         }
 
         // Handle bonus cherry collection
