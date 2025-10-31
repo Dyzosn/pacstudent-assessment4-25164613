@@ -13,7 +13,7 @@ public class GameManager : MonoBehaviour
 
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI scoreText;
-    [SerializeField] private TextMeshProUGUI livesText;
+    [SerializeField] private GameObject[] lifeIcons; // Array for life icon images
     [SerializeField] private TextMeshProUGUI timerText;
 
     private bool isGameActive = false;
@@ -94,9 +94,16 @@ public class GameManager : MonoBehaviour
 
     void UpdateLivesUI()
     {
-        if (livesText != null)
+        // Show or hide life icons based on remaining lives
+        for (int i = 0; i < lifeIcons.Length; i++)
         {
-            livesText.text = currentLives.ToString();
+            if (lifeIcons[i] != null)
+            {
+                // Icon is visible if index is less than current lives
+                // e.g. lives = 3 -> icons 0,1,2 visible
+                //      lives = 2 -> icons 0,1 visible, icon 2 hidden
+                lifeIcons[i].SetActive(i < currentLives);
+            }
         }
     }
 

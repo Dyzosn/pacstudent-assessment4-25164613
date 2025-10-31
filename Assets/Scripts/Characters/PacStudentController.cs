@@ -11,6 +11,7 @@ public class PacStudentController : MonoBehaviour
     [Header("Audio")]
     [SerializeField] private AudioClip movementAudioClip;
     [SerializeField] private AudioClip wallCollisionSFX;
+    [SerializeField] private AudioClip pelletEatSFX;
 
     [Header("Wall Collision")]
     [SerializeField] private GameObject wallBumpParticlePrefab;
@@ -403,6 +404,65 @@ public class PacStudentController : MonoBehaviour
         if (collision.gameObject.layer == LayerMask.NameToLayer("Wall"))
         {
             isColliding = false;
+        }
+    }
+
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        // Handle pellet collection
+        if (other.CompareTag("Pellet"))
+        {
+            Destroy(other.gameObject);
+
+            // Add score via GameManager
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.AddScore(10);
+            }
+
+            // Play eating sound effect
+            if (sfxAudioSource != null && pelletEatSFX != null)
+            {
+                sfxAudioSource.PlayOneShot(pelletEatSFX);
+            }
+
+            Debug.Log("Pellet collected! +10 points");
+        }
+
+        // Handle power pellet collection (basic handling - full implementation in Section 4)
+        else if (other.CompareTag("PowerPellet"))
+        {
+            Destroy(other.gameObject);
+
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.AddScore(50);
+            }
+
+            if (sfxAudioSource != null && pelletEatSFX != null)
+            {
+                sfxAudioSource.PlayOneShot(pelletEatSFX);
+            }
+
+            Debug.Log("Power pellet collected! +50 points (basic handling)");
+        }
+
+        // Handle bonus cherry collection
+        else if (other.CompareTag("BonusCherry"))
+        {
+            Destroy(other.gameObject);
+
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.AddScore(100);
+            }
+
+            if (sfxAudioSource != null && pelletEatSFX != null)
+            {
+                sfxAudioSource.PlayOneShot(pelletEatSFX);
+            }
+
+            Debug.Log("Bonus cherry collected! +100 points");
         }
     }
 }

@@ -20925,9 +20925,12 @@ MonoBehaviour:
   currentScore: 0
   currentLives: 3
   gameTime: 0
-  scoreText: {fileID: 0}
-  livesText: {fileID: 0}
-  timerText: {fileID: 0}
+  scoreText: {fileID: 1893113695}
+  lifeIcons:
+  - {fileID: 1196537830}
+  - {fileID: 1867149037}
+  - {fileID: 723656867}
+  timerText: {fileID: 1012390165}
 --- !u!1001 &1009045941
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -38272,8 +38275,9 @@ MonoBehaviour:
   moveSpeed: 5
   levelGenerator: {fileID: 1858881189}
   movementAudioClip: {fileID: 8300000, guid: 0375aeb2fc8b7fb40b81f19636c76c15, type: 3}
-  wallBumpParticlePrefab: {fileID: 6681991650771033921, guid: ab4e97b68d4574d4d8ff6392bccb2830, type: 3}
   wallCollisionSFX: {fileID: 8300000, guid: 293a0f0c182f9fa4a9e82168933f6469, type: 3}
+  pelletEatSFX: {fileID: 8300000, guid: 14167ed4284c06042830c6dede29187d, type: 3}
+  wallBumpParticlePrefab: {fileID: 6681991650771033921, guid: ab4e97b68d4574d4d8ff6392bccb2830, type: 3}
 --- !u!50 &1809631753
 Rigidbody2D:
   serializedVersion: 4
