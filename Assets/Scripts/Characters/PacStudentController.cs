@@ -148,6 +148,17 @@ public class PacStudentController : MonoBehaviour
         {
             nextGridPos = GetNextGridPosition(currentGridPosition, lastInput);
 
+            // Check for teleport first
+            if (CheckAndHandleTeleport(ref nextGridPos))
+            {
+                // Teleported - continue in same direction
+                currentInput = lastInput;
+                currentGridPosition = nextGridPos;
+                wasBlocked = false;
+                moved = true;
+                return;
+            }
+
             if (IsWalkable(nextGridPos))
             {
                 currentInput = lastInput;
@@ -172,6 +183,15 @@ public class PacStudentController : MonoBehaviour
         if (currentInput != KeyCode.None)
         {
             nextGridPos = GetNextGridPosition(currentGridPosition, currentInput);
+
+            // Check for teleport
+            if (CheckAndHandleTeleport(ref nextGridPos))
+            {
+                currentGridPosition = nextGridPos;
+                wasBlocked = false;
+                moved = true;
+                return;
+            }
 
             if (IsWalkable(nextGridPos))
             {
@@ -293,6 +313,43 @@ public class PacStudentController : MonoBehaviour
         {
             sfxAudioSource.PlayOneShot(wallCollisionSFX);
         }
+    }
+
+    bool CheckAndHandleTeleport(ref Vector2Int gridPos)
+    {
+        if (levelGenerator == null) return false;
+
+        int[,] levelMap = levelGenerator.GetLevelMap();
+        int cols = levelMap.GetLength(1);
+        int fullMapWidth = cols * 2;
+
+        // Check left edge teleport (going further left)
+        if (gridPos.x < 0)
+        {
+            // Teleport to right edge
+            gridPos.x = fullMapWidth - 1;
+            transform.position = GridToWorld(gridPos);
+            currentGridPosition = gridPos;
+            targetPosition = transform.position;
+
+            Debug.Log($"Teleported from left edge to right edge at grid: {gridPos}");
+            return true;
+        }
+
+        // Check right edge teleport (going further right)
+        if (gridPos.x >= fullMapWidth)
+        {
+            // Teleport to left edge
+            gridPos.x = 0;
+            transform.position = GridToWorld(gridPos);
+            currentGridPosition = gridPos;
+            targetPosition = transform.position;
+
+            Debug.Log($"Teleported from right edge to left edge at grid: {gridPos}");
+            return true;
+        }
+
+        return false;
     }
 
     IEnumerator DeathSequence()
