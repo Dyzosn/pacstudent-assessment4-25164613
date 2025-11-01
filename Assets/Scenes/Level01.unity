@@ -50588,12 +50588,24 @@ PrefabInstance:
     m_TransformParent: {fileID: 1768463985}
     m_Modifications:
     - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
+      propertyPath: levelGenerator
+      value: 
+      objectReference: {fileID: 1858881189}
+    - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
+      propertyPath: enableDebugLogs
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
       propertyPath: initialPosition.x
       value: 14.5
       objectReference: {fileID: 0}
     - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
       propertyPath: initialPosition.y
       value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1571429446392241273, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
+      propertyPath: enableDiagnosticMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2998978183299908249, guid: f1cfcb251eb698b41b1e9c0bfcbfe72e, type: 3}
       propertyPath: m_LocalPosition.x
@@ -50693,12 +50705,24 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: levelGenerator
+      value: 
+      objectReference: {fileID: 1858881189}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: enableDebugLogs
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
       propertyPath: initialPosition.x
       value: 15.5
       objectReference: {fileID: 0}
     - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
       propertyPath: initialPosition.y
       value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
+      propertyPath: enableDiagnosticMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3637103430661747993, guid: a59fd978c39e35a408464559054e044f, type: 3}
       propertyPath: manualInitialPosition.x
@@ -50730,12 +50754,24 @@ PrefabInstance:
     m_TransformParent: {fileID: 1768463985}
     m_Modifications:
     - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: levelGenerator
+      value: 
+      objectReference: {fileID: 1858881189}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: enableDebugLogs
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
       propertyPath: initialPosition.x
       value: 12.5
       objectReference: {fileID: 0}
     - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
       propertyPath: initialPosition.y
       value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
+      propertyPath: enableDiagnosticMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 699546015798481422, guid: 9b5f81597de9d9447922ad3fa7981401, type: 3}
       propertyPath: manualInitialPosition.x
@@ -50847,12 +50883,24 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
+      propertyPath: levelGenerator
+      value: 
+      objectReference: {fileID: 1858881189}
+    - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
+      propertyPath: enableDebugLogs
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
       propertyPath: initialPosition.x
       value: 13.5
       objectReference: {fileID: 0}
     - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
       propertyPath: initialPosition.y
       value: -4.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 2748549743494596869, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
+      propertyPath: enableDiagnosticMode
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4038310324786039455, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
       propertyPath: m_Controller

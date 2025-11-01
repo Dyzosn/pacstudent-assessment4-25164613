@@ -7,15 +7,13 @@ public class GhostController : MonoBehaviour
     [Header("Ghost Settings")]
     [SerializeField] private bool useCurrentPositionAsInitial = true;
     [SerializeField] private Vector3 manualInitialPosition;
-    [SerializeField] private float normalMoveSpeed = 4.5f; // 90% of PacStudent's 5.0
+    [SerializeField] private float normalMoveSpeed = 4.5f;
 
     [Header("Grid References")]
     [SerializeField] private LevelGenerator levelGenerator;
 
-    // Ghost ID (1-4) based on starting position
     private int ghostID;
 
-    // Movement direction enum
     private enum MoveDirection
     {
         None,
@@ -25,7 +23,6 @@ public class GhostController : MonoBehaviour
         Right
     }
 
-    // Position tracking
     private Vector3 initialPosition;
     private Quaternion initialRotation;
     private Vector2Int currentGridPosition;
@@ -33,38 +30,47 @@ public class GhostController : MonoBehaviour
     private MoveDirection currentDirection = MoveDirection.None;
     private MoveDirection previousDirection = MoveDirection.None;
 
-    // Lerping
     private bool isLerping = false;
     private float lerpProgress = 0f;
     private float currentMoveSpeed;
 
-    // State tracking
     private Animator animator;
     private GameManager.GhostState currentState = GameManager.GhostState.Normal;
     private bool isDead = false;
 
-    // Section 2: Spawn area management
     private bool hasExitedSpawn = false;
     private bool isInSpawnArea = true;
     private bool isExitingSpawn = false;
     private Vector3 spawnExitTarget;
 
-    // Spawn area boundaries (adjusted so exit gaps are outside)
     private const float SPAWN_LEFT = 12.0f;
     private const float SPAWN_RIGHT = 16.0f;
-    private const float SPAWN_TOP = -3.0f;    // Above top exit wall
-    private const float SPAWN_BOTTOM = -6.0f; // Above bottom exit wall
+    private const float SPAWN_TOP = -3.0f;
+    private const float SPAWN_BOTTOM = -6.0f;
 
-    // Exit gap positions (OUTSIDE spawn area)
-    private const float TOP_GAP_Y = -1.5f;    // One tile above exit wall
-    private const float BOTTOM_GAP_Y = -7.5f; // One tile below exit wall
+    private const float TOP_GAP_Y = -1.5f;
+    private const float BOTTOM_GAP_Y = -7.5f;
     private const float GAP_CENTER_X = 14.0f;
+
+    private Transform pacStudentTransform;
+
+    // Behavior thresholds
+    private const float RED_FLEE_DISTANCE = 12f;    // Red flees when within 12 units
+
+    // Stuck detection for Blue
+    private Queue<Vector2Int> bluePositionHistory = new Queue<Vector2Int>();
+    private const int POSITION_HISTORY_SIZE = 6;
+    private int blueStuckCounter = 0;
+
+    // Escape mode for Blue
+    private bool blueInEscapeMode = false;
+    private MoveDirection blueEscapeDirection = MoveDirection.None;
+    private Vector2Int blueStuckPosition; // Remember where we got stuck
 
     void Start()
     {
         animator = GetComponent<Animator>();
 
-        // Determine initial position
         if (useCurrentPositionAsInitial)
         {
             initialPosition = transform.position;
@@ -75,60 +81,52 @@ public class GhostController : MonoBehaviour
         }
 
         initialRotation = transform.rotation;
-
-        // Determine ghost ID
         ghostID = DetermineGhostID(initialPosition.x);
-
-        // Calculate starting grid position
         currentGridPosition = WorldToGrid(transform.position);
         targetPosition = transform.position;
         currentMoveSpeed = normalMoveSpeed;
 
-        // Find level generator
         if (levelGenerator == null)
         {
             levelGenerator = FindFirstObjectByType<LevelGenerator>();
         }
 
-        // Check if starting in spawn
-        isInSpawnArea = IsInsideSpawnArea(transform.position);
+        PacStudentController pacStudent = FindFirstObjectByType<PacStudentController>();
+        if (pacStudent != null)
+        {
+            pacStudentTransform = pacStudent.transform;
+        }
 
-        Debug.Log($"{gameObject.name} (ID: {ghostID}) at {transform.position}, spawn: {initialPosition}");
+        isInSpawnArea = IsInsideSpawnArea(transform.position);
     }
 
     void Update()
     {
-        // Skip if game not active
         if (GameManager.Instance != null && !GameManager.Instance.IsGameActive())
         {
             return;
         }
 
-        // Sync state with animator (unless dead)
         if (!isDead && animator != null)
         {
             int animatorState = animator.GetInteger("GhostState");
             currentState = (GameManager.GhostState)animatorState;
         }
 
-        // Update movement speed based on state
         UpdateMovementSpeed();
 
-        // Dead state: Move to spawn
         if (isDead)
         {
             PerformDeadMovement();
             return;
         }
 
-        // Exiting spawn: Special movement
         if (isExitingSpawn)
         {
             PerformSpawnExit();
             return;
         }
 
-        // Normal movement
         if (!isLerping)
         {
             DecideNextMove();
@@ -138,23 +136,18 @@ public class GhostController : MonoBehaviour
             PerformLerp();
         }
 
-        // Track spawn area
         UpdateSpawnAreaStatus();
     }
 
     void UpdateMovementSpeed()
     {
-        // Normal: 90% PacStudent (4.5)
-        // Scared/Recovering/Dead: 50% Normal Ghost Speed (2.25)
         if (currentState == GameManager.GhostState.Normal)
         {
-            currentMoveSpeed = normalMoveSpeed; // 4.5
+            currentMoveSpeed = normalMoveSpeed;
         }
-        else if (currentState == GameManager.GhostState.Scared ||
-                 currentState == GameManager.GhostState.Recovering ||
-                 currentState == GameManager.GhostState.Dead)
+        else
         {
-            currentMoveSpeed = normalMoveSpeed * 0.5f; // 2.25
+            currentMoveSpeed = normalMoveSpeed * 0.5f;
         }
     }
 
@@ -164,49 +157,682 @@ public class GhostController : MonoBehaviour
         if (Mathf.Abs(xPos - 13.5f) < 0.1f) return 2;
         if (Mathf.Abs(xPos - 14.5f) < 0.1f) return 3;
         if (Mathf.Abs(xPos - 15.5f) < 0.1f) return 4;
-
-        Debug.LogWarning($"{gameObject.name} at {xPos}, defaulting ID 1");
         return 1;
     }
 
     void DecideNextMove()
     {
-        // If in spawn and not exited yet, start exit
         if (isInSpawnArea && !hasExitedSpawn && !isExitingSpawn)
         {
             StartSpawnExit();
             return;
         }
 
-        // Get valid directions
+        // Track position history for Blue ghost stuck detection
+        if (ghostID == 2)
+        {
+            Vector2Int currentGrid = WorldToGrid(transform.position);
+            bluePositionHistory.Enqueue(currentGrid);
+            if (bluePositionHistory.Count > POSITION_HISTORY_SIZE)
+            {
+                bluePositionHistory.Dequeue();
+            }
+        }
+
         List<MoveDirection> validDirections = GetValidDirections();
 
         if (validDirections.Count == 0)
         {
-            Debug.LogWarning($"{gameObject.name} no valid moves!");
             return;
         }
 
-        // Random movement
-        MoveDirection nextDirection = validDirections[Random.Range(0, validDirections.Count)];
+        MoveDirection nextDirection;
+
+        if (currentState == GameManager.GhostState.Scared ||
+            currentState == GameManager.GhostState.Recovering)
+        {
+            nextDirection = DecideGhost1Move(validDirections);
+        }
+        else
+        {
+            switch (ghostID)
+            {
+                case 1:
+                    nextDirection = DecideGhost1Move(validDirections);
+                    break;
+                case 2:
+                    nextDirection = DecideGhost2Move(validDirections);
+                    break;
+                case 3:
+                    nextDirection = DecideGhost3Move(validDirections);
+                    break;
+                case 4:
+                    nextDirection = DecideGhost4Move(validDirections);
+                    break;
+                default:
+                    nextDirection = validDirections[Random.Range(0, validDirections.Count)];
+                    break;
+            }
+        }
 
         Vector2Int nextGridPos = GetNextGridPosition(currentGridPosition, nextDirection);
-
         previousDirection = currentDirection;
         currentDirection = nextDirection;
         currentGridPosition = nextGridPos;
         StartLerp(GridToWorld(nextGridPos), nextDirection);
     }
 
-    // Dead: Move straight to OWN initialPosition
+    // Ghost 1 (Red) - FLEE with exploration when safe
+    MoveDirection DecideGhost1Move(List<MoveDirection> validDirs)
+    {
+        if (pacStudentTransform == null || validDirs.Count == 0)
+        {
+            return validDirs[Random.Range(0, validDirs.Count)];
+        }
+
+        Vector3 currentPos = transform.position;
+        Vector3 pacPos = pacStudentTransform.position;
+        float distanceToPac = Vector3.Distance(currentPos, pacPos);
+
+        // Mode 1: Active flee when PacStudent is close
+        if (distanceToPac < RED_FLEE_DISTANCE)
+        {
+            return FleeWithHybridScoring(validDirs, currentPos, pacPos);
+        }
+
+        // Mode 2: Patrol/explore when safe distance
+        // Move towards general area but not aggressively
+        return PatrolAwayFromTarget(validDirs, currentPos, pacPos);
+    }
+
+    // Smart flee using hybrid scoring
+    MoveDirection FleeWithHybridScoring(List<MoveDirection> validDirs, Vector3 currentPos, Vector3 targetPos)
+    {
+        MoveDirection bestDirection = MoveDirection.None;
+        float bestScore = float.MinValue;
+
+        Vector2 awayFromTarget = new Vector2(currentPos.x - targetPos.x, currentPos.y - targetPos.y).normalized;
+
+        foreach (MoveDirection dir in validDirs)
+        {
+            Vector2Int nextGrid = GetNextGridPosition(currentGridPosition, dir);
+            Vector3 nextPos = GridToWorld(nextGrid);
+            float distance = Vector3.Distance(nextPos, targetPos);
+
+            Vector2 moveVector = GetDirectionVector(dir);
+            float alignment = Vector2.Dot(moveVector, awayFromTarget);
+
+            // Scoring: distance + alignment
+            float distanceScore = distance / 30f;
+            float alignmentScore = (alignment + 1f) / 2f;
+            float totalScore = (0.4f * distanceScore * 100f) + (0.6f * alignmentScore * 100f);
+
+            // Bonus for continuing
+            if (dir == currentDirection && currentDirection != MoveDirection.None)
+            {
+                totalScore += 10f;
+            }
+
+            if (totalScore > bestScore)
+            {
+                bestScore = totalScore;
+                bestDirection = dir;
+            }
+        }
+
+        return bestDirection != MoveDirection.None ? bestDirection : validDirs[Random.Range(0, validDirs.Count)];
+    }
+
+    // Patrol mode - move around but maintain distance
+    MoveDirection PatrolAwayFromTarget(List<MoveDirection> validDirs, Vector3 currentPos, Vector3 targetPos)
+    {
+        // Prefer continuing current direction (70% chance)
+        if (validDirs.Contains(currentDirection) && currentDirection != MoveDirection.None && Random.value < 0.7f)
+        {
+            return currentDirection;
+        }
+
+        // Otherwise, pick direction that maintains safe distance
+        List<MoveDirection> goodDirs = new List<MoveDirection>();
+        float currentDistance = Vector3.Distance(currentPos, targetPos);
+
+        foreach (MoveDirection dir in validDirs)
+        {
+            Vector2Int nextGrid = GetNextGridPosition(currentGridPosition, dir);
+            Vector3 nextPos = GridToWorld(nextGrid);
+            float newDistance = Vector3.Distance(nextPos, targetPos);
+
+            // Accept directions that don't get too close
+            if (newDistance >= currentDistance * 0.9f)
+            {
+                goodDirs.Add(dir);
+            }
+        }
+
+        if (goodDirs.Count > 0)
+        {
+            return goodDirs[Random.Range(0, goodDirs.Count)];
+        }
+
+        return validDirs[Random.Range(0, validDirs.Count)];
+    }
+
+    // Ghost 2 (Blue) - ALWAYS CHASE with escape until intersection
+    MoveDirection DecideGhost2Move(List<MoveDirection> validDirs)
+    {
+        if (pacStudentTransform == null || validDirs.Count == 0)
+        {
+            return validDirs[Random.Range(0, validDirs.Count)];
+        }
+
+        // Declare these once at the start
+        Vector3 currentPos = transform.position;
+        Vector3 pacPos = pacStudentTransform.position;
+
+        // If in escape mode, continue until intersection or far from stuck position
+        if (blueInEscapeMode)
+        {
+            // Check if we've reached an intersection (3+ WALKABLE directions, not filtered)
+            // Need to count walkable before backstep filter
+            int walkableCount = 0;
+            List<MoveDirection> allDirs = new List<MoveDirection>
+            {
+                MoveDirection.Up, MoveDirection.Down, MoveDirection.Left, MoveDirection.Right
+            };
+
+            foreach (MoveDirection dir in allDirs)
+            {
+                Vector2Int nextPos = GetNextGridPosition(currentGridPosition, dir);
+                Vector3 nextWorldPos = GridToWorld(nextPos);
+
+                // Don't allow re-entry to spawn
+                if (!isDead && hasExitedSpawn && IsInsideSpawnArea(nextWorldPos))
+                {
+                    continue;
+                }
+
+                if (IsWalkable(nextPos))
+                {
+                    walkableCount++;
+                }
+            }
+
+            bool reachedIntersection = walkableCount >= 3;
+
+            // Check if we're far from stuck position
+            Vector2Int currentGrid = WorldToGrid(transform.position);
+            float distanceFromStuck = Vector2Int.Distance(currentGrid, blueStuckPosition);
+            bool farFromStuck = distanceFromStuck >= 5f;
+
+            // Exit escape mode if reached intersection OR far from stuck
+            if (reachedIntersection || farFromStuck)
+            {
+                blueInEscapeMode = false;
+                bluePositionHistory.Clear();
+                blueStuckCounter = 0;
+
+                // At intersection, FORCE A TURN (not continue straight)
+                if (reachedIntersection)
+                {
+                    // Get perpendicular directions to escape (force turn)
+                    List<MoveDirection> turnDirections = new List<MoveDirection>();
+
+                    if (blueEscapeDirection == MoveDirection.Up || blueEscapeDirection == MoveDirection.Down)
+                    {
+                        // Was moving vertical, force horizontal turn
+                        if (validDirs.Contains(MoveDirection.Left)) turnDirections.Add(MoveDirection.Left);
+                        if (validDirs.Contains(MoveDirection.Right)) turnDirections.Add(MoveDirection.Right);
+                    }
+                    else if (blueEscapeDirection == MoveDirection.Left || blueEscapeDirection == MoveDirection.Right)
+                    {
+                        // Was moving horizontal, force vertical turn
+                        if (validDirs.Contains(MoveDirection.Up)) turnDirections.Add(MoveDirection.Up);
+                        if (validDirs.Contains(MoveDirection.Down)) turnDirections.Add(MoveDirection.Down);
+                    }
+
+                    // Further filter: remove direction back towards stuck
+                    if (turnDirections.Count > 1)
+                    {
+                        Vector2Int intersectionGrid = WorldToGrid(transform.position);
+                        Vector2 awayFromStuck = new Vector2(
+                            intersectionGrid.x - blueStuckPosition.x,
+                            intersectionGrid.y - blueStuckPosition.y
+                        ).normalized;
+
+                        // Pick turn direction that goes AWAY from stuck
+                        MoveDirection bestTurn = MoveDirection.None;
+                        float bestAlignment = -1f;
+
+                        foreach (MoveDirection dir in turnDirections)
+                        {
+                            Vector2 dirVector = GetDirectionVector(dir);
+                            float alignment = Vector2.Dot(dirVector, awayFromStuck);
+
+                            if (alignment > bestAlignment)
+                            {
+                                bestAlignment = alignment;
+                                bestTurn = dir;
+                            }
+                        }
+
+                        if (bestTurn != MoveDirection.None)
+                        {
+                            return bestTurn;
+                        }
+                    }
+
+                    // If only one turn direction, take it
+                    if (turnDirections.Count > 0)
+                    {
+                        return turnDirections[0];
+                    }
+                }
+
+                // Far from stuck OR no turn available - use normal hybrid chase
+                return ChaseWithHybridScoring(validDirs, currentPos, pacPos);
+            }
+
+            // Still escaping - try to continue in escape direction
+            if (validDirs.Contains(blueEscapeDirection))
+            {
+                return blueEscapeDirection;
+            }
+            else
+            {
+                // Can't continue escape (hit wall) - pick perpendicular
+                MoveDirection alternative = GetPerpendicularToDirection(blueEscapeDirection, validDirs);
+                if (alternative != MoveDirection.None)
+                {
+                    // Update escape direction to new perpendicular
+                    blueEscapeDirection = alternative;
+                    return alternative;
+                }
+
+                // Last resort - pick any valid
+                blueInEscapeMode = false;
+                return validDirs[Random.Range(0, validDirs.Count)];
+            }
+        }
+
+        // Detect if Blue is stuck (oscillating between same positions)
+        bool isStuck = DetectBlueStuck();
+
+        // If stuck, initiate escape mode
+        if (isStuck)
+        {
+            blueStuckCounter++;
+
+            // Save current position as stuck position
+            blueStuckPosition = WorldToGrid(transform.position);
+
+            // Determine escape direction
+            MoveDirection escapeDir = MoveDirection.None;
+
+            if (blueStuckCounter >= 3)
+            {
+                // After 3 stuck detections, try random
+                escapeDir = validDirs[Random.Range(0, validDirs.Count)];
+            }
+            else
+            {
+                // First 2 stuck detections, try perpendicular
+                escapeDir = GetPerpendicularToTarget(validDirs, currentPos, pacPos);
+                if (escapeDir == MoveDirection.None)
+                {
+                    escapeDir = validDirs[Random.Range(0, validDirs.Count)];
+                }
+            }
+
+            // Activate escape mode
+            blueInEscapeMode = true;
+            blueEscapeDirection = escapeDir;
+
+            return escapeDir;
+        }
+        else
+        {
+            // Not stuck, reset counter
+            blueStuckCounter = 0;
+        }
+
+        // Normal aggressive hybrid chase scoring
+        return ChaseWithHybridScoring(validDirs, currentPos, pacPos);
+    }
+
+    // Get direction perpendicular to given direction
+    MoveDirection GetPerpendicularToDirection(MoveDirection dir, List<MoveDirection> validDirs)
+    {
+        List<MoveDirection> perpendiculars = new List<MoveDirection>();
+
+        if (dir == MoveDirection.Up || dir == MoveDirection.Down)
+        {
+            // Vertical - try horizontal
+            if (validDirs.Contains(MoveDirection.Left)) perpendiculars.Add(MoveDirection.Left);
+            if (validDirs.Contains(MoveDirection.Right)) perpendiculars.Add(MoveDirection.Right);
+        }
+        else if (dir == MoveDirection.Left || dir == MoveDirection.Right)
+        {
+            // Horizontal - try vertical
+            if (validDirs.Contains(MoveDirection.Up)) perpendiculars.Add(MoveDirection.Up);
+            if (validDirs.Contains(MoveDirection.Down)) perpendiculars.Add(MoveDirection.Down);
+        }
+
+        if (perpendiculars.Count > 0)
+        {
+            return perpendiculars[Random.Range(0, perpendiculars.Count)];
+        }
+
+        return MoveDirection.None;
+    }
+
+    // Detect if Blue is stuck in local minimum
+    bool DetectBlueStuck()
+    {
+        if (bluePositionHistory.Count < POSITION_HISTORY_SIZE)
+        {
+            return false; // Not enough data
+        }
+
+        // Check if oscillating between same 2-3 positions
+        Vector2Int[] positions = bluePositionHistory.ToArray();
+        List<Vector2Int> uniquePositions = new List<Vector2Int>();
+
+        foreach (Vector2Int pos in positions)
+        {
+            if (!uniquePositions.Contains(pos))
+            {
+                uniquePositions.Add(pos);
+            }
+        }
+
+        // If only visiting 2-3 positions in last 6 moves, we're stuck
+        return uniquePositions.Count <= 3;
+    }
+
+    // Get direction perpendicular to target (to escape stuck corner)
+    MoveDirection GetPerpendicularToTarget(List<MoveDirection> validDirs, Vector3 currentPos, Vector3 targetPos)
+    {
+        Vector2 toTarget = new Vector2(targetPos.x - currentPos.x, targetPos.y - currentPos.y).normalized;
+
+        // Get perpendicular vectors (rotate 90 degrees)
+        Vector2 perp1 = new Vector2(-toTarget.y, toTarget.x);  // 90 degrees counterclockwise
+        Vector2 perp2 = new Vector2(toTarget.y, -toTarget.x);  // 90 degrees clockwise
+
+        MoveDirection bestPerp = MoveDirection.None;
+        float bestAlignment = -1f;
+
+        foreach (MoveDirection dir in validDirs)
+        {
+            Vector2 moveVec = GetDirectionVector(dir);
+
+            // Check alignment with perpendicular vectors
+            float align1 = Vector2.Dot(moveVec, perp1);
+            float align2 = Vector2.Dot(moveVec, perp2);
+            float maxAlign = Mathf.Max(align1, align2);
+
+            if (maxAlign > bestAlignment)
+            {
+                bestAlignment = maxAlign;
+                bestPerp = dir;
+            }
+        }
+
+        return bestPerp;
+    }
+
+    // Smart chase using hybrid scoring
+    MoveDirection ChaseWithHybridScoring(List<MoveDirection> validDirs, Vector3 currentPos, Vector3 targetPos)
+    {
+        MoveDirection bestDirection = MoveDirection.None;
+        float bestScore = float.MinValue;
+
+        Vector2 towardsTarget = new Vector2(targetPos.x - currentPos.x, targetPos.y - currentPos.y).normalized;
+
+        foreach (MoveDirection dir in validDirs)
+        {
+            Vector2Int nextGrid = GetNextGridPosition(currentGridPosition, dir);
+            Vector3 nextPos = GridToWorld(nextGrid);
+            float distance = Vector3.Distance(nextPos, targetPos);
+
+            Vector2 moveVector = GetDirectionVector(dir);
+            float alignment = Vector2.Dot(moveVector, towardsTarget);
+
+            // Scoring: closer is better + aligned is better
+            float distanceScore = 1f / (distance + 1f);
+            float alignmentScore = (alignment + 1f) / 2f;
+            float totalScore = (0.4f * distanceScore * 100f) + (0.6f * alignmentScore * 100f);
+
+            // Bonus for continuing
+            if (dir == currentDirection && currentDirection != MoveDirection.None)
+            {
+                totalScore += 10f;
+            }
+
+            if (totalScore > bestScore)
+            {
+                bestScore = totalScore;
+                bestDirection = dir;
+            }
+        }
+
+        return bestDirection != MoveDirection.None ? bestDirection : validDirs[Random.Range(0, validDirs.Count)];
+    }
+
+    // Get direction vector for a move
+    Vector2 GetDirectionVector(MoveDirection dir)
+    {
+        switch (dir)
+        {
+            case MoveDirection.Up: return new Vector2(0, 1);
+            case MoveDirection.Down: return new Vector2(0, -1);
+            case MoveDirection.Left: return new Vector2(-1, 0);
+            case MoveDirection.Right: return new Vector2(1, 0);
+            default: return Vector2.zero;
+        }
+    }
+
+    // Ghost 3 (Pink) - Pure random
+    MoveDirection DecideGhost3Move(List<MoveDirection> validDirs)
+    {
+        if (validDirs.Count == 0) return MoveDirection.None;
+
+        // Prefer continuing at intersections
+        if (validDirs.Count > 2 && validDirs.Contains(currentDirection) &&
+            currentDirection != MoveDirection.None && Random.value < 0.7f)
+        {
+            return currentDirection;
+        }
+
+        return validDirs[Random.Range(0, validDirs.Count)];
+    }
+
+    // Ghost 4 (Orange) - Clockwise wall-follow
+    MoveDirection DecideGhost4Move(List<MoveDirection> validDirs)
+    {
+        if (validDirs.Count == 0) return MoveDirection.None;
+
+        // In corridors (only 1-2 options), ALWAYS continue if possible
+        if (validDirs.Count == 1)
+        {
+            return validDirs[0];
+        }
+
+        if (validDirs.Count == 2)
+        {
+            // Two options - pick the one that's NOT backstep
+            foreach (MoveDirection dir in validDirs)
+            {
+                if (!IsOppositeDirection(dir, currentDirection))
+                {
+                    return dir;
+                }
+            }
+            // If both are valid (shouldn't happen), pick first
+            return validDirs[0];
+        }
+
+        // At intersections (3+ options), use wall-following logic
+        bool isNearWall = IsNearOutsideWall();
+
+        if (isNearWall)
+        {
+            MoveDirection preferredDir = GetClockwiseDirection(validDirs);
+            if (preferredDir != MoveDirection.None)
+            {
+                return preferredDir;
+            }
+        }
+
+        // Not near wall - head towards one
+        MoveDirection towardsWall = GetDirectionTowardsOutsideWall(validDirs);
+        if (towardsWall != MoveDirection.None)
+        {
+            return towardsWall;
+        }
+
+        // Fallback - prefer continuing
+        if (validDirs.Contains(currentDirection) && currentDirection != MoveDirection.None)
+        {
+            return currentDirection;
+        }
+
+        return validDirs[Random.Range(0, validDirs.Count)];
+    }
+
+    bool IsNearOutsideWall()
+    {
+        Vector3 pos = transform.position;
+        const float THRESHOLD = 2.5f;
+
+        return pos.x <= 0.5f + THRESHOLD || pos.x >= 27.5f - THRESHOLD ||
+               pos.y >= 9.5f - THRESHOLD || pos.y <= -18.5f + THRESHOLD;
+    }
+
+    MoveDirection GetClockwiseDirection(List<MoveDirection> validDirs)
+    {
+        Vector3 pos = transform.position;
+        const float CHECK = 3.0f;
+
+        bool nearLeft = pos.x <= 0.5f + CHECK;
+        bool nearRight = pos.x >= 27.5f - CHECK;
+        bool nearTop = pos.y >= 9.5f - CHECK;
+        bool nearBottom = pos.y <= -18.5f + CHECK;
+
+        // Corners with explicit priority
+        if (nearTop && nearRight)
+        {
+            if (validDirs.Contains(MoveDirection.Down)) return MoveDirection.Down;
+            if (validDirs.Contains(MoveDirection.Left)) return MoveDirection.Left;
+        }
+        else if (nearRight && nearBottom)
+        {
+            if (validDirs.Contains(MoveDirection.Left)) return MoveDirection.Left;
+            if (validDirs.Contains(MoveDirection.Up)) return MoveDirection.Up;
+        }
+        else if (nearBottom && nearLeft)
+        {
+            if (validDirs.Contains(MoveDirection.Up)) return MoveDirection.Up;
+            if (validDirs.Contains(MoveDirection.Right)) return MoveDirection.Right;
+        }
+        else if (nearLeft && nearTop)
+        {
+            if (validDirs.Contains(MoveDirection.Right)) return MoveDirection.Right;
+            if (validDirs.Contains(MoveDirection.Down)) return MoveDirection.Down;
+        }
+        // Straight walls
+        else if (nearTop && validDirs.Contains(MoveDirection.Right)) return MoveDirection.Right;
+        else if (nearRight && validDirs.Contains(MoveDirection.Down)) return MoveDirection.Down;
+        else if (nearBottom && validDirs.Contains(MoveDirection.Left)) return MoveDirection.Left;
+        else if (nearLeft && validDirs.Contains(MoveDirection.Up)) return MoveDirection.Up;
+
+        return MoveDirection.None;
+    }
+
+    MoveDirection GetDirectionTowardsOutsideWall(List<MoveDirection> validDirs)
+    {
+        Vector3 pos = transform.position;
+
+        float distLeft = pos.x - 0.5f;
+        float distRight = 27.5f - pos.x;
+        float distTop = 9.5f - pos.y;
+        float distBottom = pos.y - (-18.5f);
+
+        float minDist = Mathf.Min(distLeft, distRight, distTop, distBottom);
+        MoveDirection towardsWall = MoveDirection.None;
+
+        if (minDist == distLeft) towardsWall = MoveDirection.Left;
+        else if (minDist == distRight) towardsWall = MoveDirection.Right;
+        else if (minDist == distTop) towardsWall = MoveDirection.Up;
+        else if (minDist == distBottom) towardsWall = MoveDirection.Down;
+
+        if (validDirs.Contains(towardsWall))
+        {
+            return towardsWall;
+        }
+
+        return MoveDirection.None;
+    }
+
+    List<MoveDirection> GetValidDirections()
+    {
+        List<MoveDirection> validDirs = new List<MoveDirection>();
+        List<MoveDirection> allDirs = new List<MoveDirection>
+        {
+            MoveDirection.Up, MoveDirection.Down, MoveDirection.Left, MoveDirection.Right
+        };
+
+        List<MoveDirection> walkableDirs = new List<MoveDirection>();
+
+        // Find all walkable directions
+        foreach (MoveDirection dir in allDirs)
+        {
+            Vector2Int nextPos = GetNextGridPosition(currentGridPosition, dir);
+            Vector3 nextWorldPos = GridToWorld(nextPos);
+
+            // Don't allow re-entry to spawn
+            if (!isDead && hasExitedSpawn && IsInsideSpawnArea(nextWorldPos))
+            {
+                continue;
+            }
+
+            if (IsWalkable(nextPos))
+            {
+                walkableDirs.Add(dir);
+            }
+        }
+
+        // In corridors, allow all walkable (including backstep if needed)
+        if (walkableDirs.Count <= 2)
+        {
+            return walkableDirs;
+        }
+
+        // At intersections, avoid backstep
+        foreach (MoveDirection dir in walkableDirs)
+        {
+            if (IsOppositeDirection(dir, previousDirection) && previousDirection != MoveDirection.None)
+            {
+                continue;
+            }
+
+            validDirs.Add(dir);
+        }
+
+        // Fallback
+        if (validDirs.Count == 0 && walkableDirs.Count > 0)
+        {
+            return walkableDirs;
+        }
+
+        return validDirs;
+    }
+
     void PerformDeadMovement()
     {
         float deadSpeed = normalMoveSpeed * 0.5f;
-
         Vector3 direction = (initialPosition - transform.position).normalized;
         transform.position += direction * deadSpeed * Time.deltaTime;
 
-        // Animation facing
         if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
         {
             UpdateAnimationDirection(direction.x > 0 ? MoveDirection.Right : MoveDirection.Left);
@@ -216,14 +842,12 @@ public class GhostController : MonoBehaviour
             UpdateAnimationDirection(direction.y > 0 ? MoveDirection.Up : MoveDirection.Down);
         }
 
-        // Check arrival at spawn
         if (Vector3.Distance(transform.position, initialPosition) < 0.2f)
         {
             transform.position = initialPosition;
             transform.rotation = initialRotation;
             currentGridPosition = WorldToGrid(initialPosition);
             targetPosition = initialPosition;
-
             RespawnAtSpawn();
         }
     }
@@ -232,7 +856,6 @@ public class GhostController : MonoBehaviour
     {
         isExitingSpawn = true;
 
-        // Ghost 1&3 = top, Ghost 2&4 = bottom
         if (ghostID == 1 || ghostID == 3)
         {
             spawnExitTarget = new Vector3(GAP_CENTER_X, TOP_GAP_Y, 0f);
@@ -241,18 +864,14 @@ public class GhostController : MonoBehaviour
         {
             spawnExitTarget = new Vector3(GAP_CENTER_X, BOTTOM_GAP_Y, 0f);
         }
-
-        Debug.Log($"{gameObject.name} exiting to {spawnExitTarget}");
     }
 
     void PerformSpawnExit()
     {
         Vector3 direction = (spawnExitTarget - transform.position).normalized;
         float exitSpeed = normalMoveSpeed * 0.5f;
-
         transform.position += direction * exitSpeed * Time.deltaTime;
 
-        // Animation
         if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
         {
             UpdateAnimationDirection(direction.x > 0 ? MoveDirection.Right : MoveDirection.Left);
@@ -262,36 +881,38 @@ public class GhostController : MonoBehaviour
             UpdateAnimationDirection(direction.y > 0 ? MoveDirection.Up : MoveDirection.Down);
         }
 
-        // Check if exited
-        if (!IsInsideSpawnArea(transform.position))
+        if (Vector3.Distance(transform.position, spawnExitTarget) < 0.1f)
         {
+            transform.position = spawnExitTarget;
+            currentGridPosition = WorldToGrid(spawnExitTarget);
+            targetPosition = spawnExitTarget;
             isExitingSpawn = false;
             hasExitedSpawn = true;
-            isInSpawnArea = false;
-
-            // Snap to grid
-            currentGridPosition = WorldToGrid(transform.position);
-            targetPosition = GridToWorld(currentGridPosition);
-            transform.position = targetPosition;
-
-            Debug.Log($"{gameObject.name} exited spawn");
         }
     }
 
     void RespawnAtSpawn()
     {
         isDead = false;
-        isInSpawnArea = true;
         hasExitedSpawn = false;
+        isInSpawnArea = true;
         isExitingSpawn = false;
 
-        // Notify GameManager
+        // Clear Blue stuck detection
+        if (ghostID == 2)
+        {
+            bluePositionHistory.Clear();
+            blueStuckCounter = 0;
+            blueInEscapeMode = false;
+            blueEscapeDirection = MoveDirection.None;
+            blueStuckPosition = Vector2Int.zero;
+        }
+
         if (GameManager.Instance != null)
         {
             GameManager.Instance.OnGhostRespawn();
         }
 
-        // Determine state based on scared timer
         GameManager.GhostState newState = GameManager.GhostState.Normal;
 
         if (GameManager.Instance != null && GameManager.Instance.IsGhostScaredActive())
@@ -301,8 +922,6 @@ public class GhostController : MonoBehaviour
         }
 
         SetState(newState);
-
-        Debug.Log($"{gameObject.name} respawned as {newState}");
     }
 
     bool IsInsideSpawnArea(Vector3 pos)
@@ -314,52 +933,6 @@ public class GhostController : MonoBehaviour
     void UpdateSpawnAreaStatus()
     {
         isInSpawnArea = IsInsideSpawnArea(transform.position);
-    }
-
-    List<MoveDirection> GetValidDirections()
-    {
-        List<MoveDirection> validDirs = new List<MoveDirection>();
-
-        foreach (MoveDirection dir in new MoveDirection[] { MoveDirection.Up, MoveDirection.Down, MoveDirection.Left, MoveDirection.Right })
-        {
-            // No backstep
-            if (IsOppositeDirection(dir, previousDirection))
-            {
-                continue;
-            }
-
-            Vector2Int nextPos = GetNextGridPosition(currentGridPosition, dir);
-
-            // Prevent re-entry to spawn (unless dead)
-            Vector3 nextWorldPos = GridToWorld(nextPos);
-            if (!isDead && hasExitedSpawn && IsInsideSpawnArea(nextWorldPos))
-            {
-                continue;
-            }
-
-            if (IsWalkable(nextPos))
-            {
-                validDirs.Add(dir);
-            }
-        }
-
-        // Allow backstep if cornered
-        if (validDirs.Count == 0)
-        {
-            MoveDirection oppositeDir = GetOppositeDirection(previousDirection);
-            Vector2Int backPos = GetNextGridPosition(currentGridPosition, oppositeDir);
-
-            Vector3 backWorldPos = GridToWorld(backPos);
-            if (isDead || !hasExitedSpawn || !IsInsideSpawnArea(backWorldPos))
-            {
-                if (IsWalkable(backPos))
-                {
-                    validDirs.Add(oppositeDir);
-                }
-            }
-        }
-
-        return validDirs;
     }
 
     bool IsOppositeDirection(MoveDirection dir1, MoveDirection dir2)
@@ -388,7 +961,6 @@ public class GhostController : MonoBehaviour
         targetPosition = target;
         isLerping = true;
         lerpProgress = 0f;
-
         UpdateAnimationDirection(direction);
     }
 
@@ -410,7 +982,6 @@ public class GhostController : MonoBehaviour
         if (animator == null) return;
 
         float directionValue = 0f;
-
         switch (dir)
         {
             case MoveDirection.Down: directionValue = 0f; break;
@@ -445,7 +1016,6 @@ public class GhostController : MonoBehaviour
         int mappedX = gridPos.x;
         int mappedY = gridPos.y;
 
-        // Mirror logic
         if (gridPos.x >= cols)
         {
             mappedX = (cols * 2 - 1) - gridPos.x;
@@ -456,7 +1026,6 @@ public class GhostController : MonoBehaviour
             mappedY = (rows * 2 - 2) - gridPos.y;
         }
 
-        // Bounds check
         if (mappedX < 0 || mappedX >= cols || mappedY < 0 || mappedY >= rows)
         {
             return false;
@@ -464,15 +1033,11 @@ public class GhostController : MonoBehaviour
 
         int tileType = levelMap[mappedY, mappedX];
 
-        // Tile 8 (ghost exit wall) has special rules:
-        // - Only walkable when exiting spawn OR dead (returning to spawn)
-        // - After exiting, becomes a wall (cannot step on door)
         if (tileType == 8)
         {
             return isExitingSpawn || isDead;
         }
 
-        // Normal walkable tiles: 0=empty, 5=pellet, 6=power pellet
         return tileType == 0 || tileType == 5 || tileType == 6;
     }
 
@@ -492,7 +1057,6 @@ public class GhostController : MonoBehaviour
 
     public void Die()
     {
-        // Eaten by PacStudent - enter dead state immediately
         isDead = true;
         currentState = GameManager.GhostState.Dead;
         isLerping = false;
@@ -506,13 +1070,10 @@ public class GhostController : MonoBehaviour
         {
             GameManager.Instance.OnGhostDeath();
         }
-
-        Debug.Log($"{gameObject.name} died! Returning to {initialPosition}");
     }
 
     public void ResetToInitialPosition()
     {
-        // PacStudent dies - reset all ghosts
         isDead = false;
         transform.position = initialPosition;
         transform.rotation = initialRotation;
@@ -522,14 +1083,21 @@ public class GhostController : MonoBehaviour
         previousDirection = MoveDirection.None;
         isLerping = false;
 
-        // Reset spawn flags
         hasExitedSpawn = false;
         isInSpawnArea = true;
         isExitingSpawn = false;
 
-        SetState(GameManager.GhostState.Normal);
+        // Clear Blue stuck detection
+        if (ghostID == 2)
+        {
+            bluePositionHistory.Clear();
+            blueStuckCounter = 0;
+            blueInEscapeMode = false;
+            blueEscapeDirection = MoveDirection.None;
+            blueStuckPosition = Vector2Int.zero;
+        }
 
-        Debug.Log($"{gameObject.name} reset");
+        SetState(GameManager.GhostState.Normal);
     }
 
     void SetState(GameManager.GhostState newState)
@@ -542,7 +1110,6 @@ public class GhostController : MonoBehaviour
         }
     }
 
-    // Getters
     public GameManager.GhostState GetCurrentState() => currentState;
     public bool IsDead() => isDead;
     public Vector3 GetInitialPosition() => initialPosition;
