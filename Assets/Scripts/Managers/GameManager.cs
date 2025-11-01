@@ -397,14 +397,12 @@ public class GameManager : MonoBehaviour
     {
         isGameActive = false;
 
-        // Check if this is a new high score or better time
-        bool isNewRecord = false;
+        // Check and save high score if this is a new record
         if (currentScore > highScore || (currentScore == highScore && gameTime < bestTime))
         {
             highScore = currentScore;
             bestTime = gameTime;
             SaveHighScore();
-            isNewRecord = true;
             Debug.Log($"New record! Score: {highScore}, Time: {bestTime:F2}s");
         }
 
