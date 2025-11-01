@@ -50854,6 +50854,10 @@ PrefabInstance:
       propertyPath: initialPosition.y
       value: -4.5
       objectReference: {fileID: 0}
+    - target: {fileID: 4038310324786039455, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 22100000, guid: d8a1752090cfa3643b44b17616f0ee18, type: 2}
     - target: {fileID: 6009665021506178022, guid: 29fc2df8336b1d74aa904bab79546966, type: 3}
       propertyPath: m_Name
       value: BlueDrone

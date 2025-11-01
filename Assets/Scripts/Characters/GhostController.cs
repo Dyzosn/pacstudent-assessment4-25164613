@@ -15,8 +15,8 @@ public class GhostController : MonoBehaviour
     // Ghost ID (1-4) based on starting position
     private int ghostID;
 
-    // Movement direction enum
-    private enum Direction
+    // Movement direction enum (renamed to avoid conflict with animator parameter)
+    private enum MoveDirection
     {
         None,
         Up,
@@ -30,8 +30,8 @@ public class GhostController : MonoBehaviour
     private Quaternion initialRotation;
     private Vector2Int currentGridPosition;
     private Vector3 targetPosition;
-    private Direction currentDirection = Direction.None;
-    private Direction previousDirection = Direction.None;
+    private MoveDirection currentDirection = MoveDirection.None;
+    private MoveDirection previousDirection = MoveDirection.None;
 
     // Lerping
     private bool isLerping = false;
@@ -123,7 +123,7 @@ public class GhostController : MonoBehaviour
     void DecideNextMove()
     {
         // Get list of valid directions (no backstep)
-        List<Direction> validDirections = GetValidDirections();
+        List<MoveDirection> validDirections = GetValidDirections();
 
         if (validDirections.Count == 0)
         {
@@ -133,7 +133,7 @@ public class GhostController : MonoBehaviour
         }
 
         // Section 1: Basic random movement for all ghosts (for testing)
-        Direction nextDirection = validDirections[Random.Range(0, validDirections.Count)];
+        MoveDirection nextDirection = validDirections[Random.Range(0, validDirections.Count)];
 
         // Calculate next grid position
         Vector2Int nextGridPos = GetNextGridPosition(currentGridPosition, nextDirection);
@@ -145,12 +145,12 @@ public class GhostController : MonoBehaviour
         StartLerp(GridToWorld(nextGridPos), nextDirection);
     }
 
-    List<Direction> GetValidDirections()
+    List<MoveDirection> GetValidDirections()
     {
-        List<Direction> validDirs = new List<Direction>();
+        List<MoveDirection> validDirs = new List<MoveDirection>();
 
         // Check all four directions
-        foreach (Direction dir in new Direction[] { Direction.Up, Direction.Down, Direction.Left, Direction.Right })
+        foreach (MoveDirection dir in new MoveDirection[] { MoveDirection.Up, MoveDirection.Down, MoveDirection.Left, MoveDirection.Right })
         {
             // Skip backstep (opposite of previous direction)
             if (IsOppositeDirection(dir, previousDirection))
@@ -170,7 +170,7 @@ public class GhostController : MonoBehaviour
         // If no valid directions (cornered), allow backstep
         if (validDirs.Count == 0)
         {
-            Direction oppositeDir = GetOppositeDirection(previousDirection);
+            MoveDirection oppositeDir = GetOppositeDirection(previousDirection);
             Vector2Int backPos = GetNextGridPosition(currentGridPosition, oppositeDir);
 
             if (IsWalkable(backPos))
@@ -182,28 +182,28 @@ public class GhostController : MonoBehaviour
         return validDirs;
     }
 
-    bool IsOppositeDirection(Direction dir1, Direction dir2)
+    bool IsOppositeDirection(MoveDirection dir1, MoveDirection dir2)
     {
-        if (dir1 == Direction.Up && dir2 == Direction.Down) return true;
-        if (dir1 == Direction.Down && dir2 == Direction.Up) return true;
-        if (dir1 == Direction.Left && dir2 == Direction.Right) return true;
-        if (dir1 == Direction.Right && dir2 == Direction.Left) return true;
+        if (dir1 == MoveDirection.Up && dir2 == MoveDirection.Down) return true;
+        if (dir1 == MoveDirection.Down && dir2 == MoveDirection.Up) return true;
+        if (dir1 == MoveDirection.Left && dir2 == MoveDirection.Right) return true;
+        if (dir1 == MoveDirection.Right && dir2 == MoveDirection.Left) return true;
         return false;
     }
 
-    Direction GetOppositeDirection(Direction dir)
+    MoveDirection GetOppositeDirection(MoveDirection dir)
     {
         switch (dir)
         {
-            case Direction.Up: return Direction.Down;
-            case Direction.Down: return Direction.Up;
-            case Direction.Left: return Direction.Right;
-            case Direction.Right: return Direction.Left;
-            default: return Direction.None;
+            case MoveDirection.Up: return MoveDirection.Down;
+            case MoveDirection.Down: return MoveDirection.Up;
+            case MoveDirection.Left: return MoveDirection.Right;
+            case MoveDirection.Right: return MoveDirection.Left;
+            default: return MoveDirection.None;
         }
     }
 
-    void StartLerp(Vector3 target, Direction direction)
+    void StartLerp(Vector3 target, MoveDirection direction)
     {
         targetPosition = target;
         isLerping = true;
@@ -227,40 +227,41 @@ public class GhostController : MonoBehaviour
         }
     }
 
-    void UpdateAnimationDirection(Direction dir)
+    void UpdateAnimationDirection(MoveDirection dir)
     {
         if (animator == null) return;
 
         // Set Direction parameter (0=Down, 1=Left, 2=Right, 3=Up)
-        int directionValue = 0;
+        // Blend Tree parameters must be Float, not Int!
+        float directionValue = 0f;
 
         switch (dir)
         {
-            case Direction.Down:
-                directionValue = 0;
+            case MoveDirection.Down:
+                directionValue = 0f;
                 break;
-            case Direction.Left:
-                directionValue = 1;
+            case MoveDirection.Left:
+                directionValue = 1f;
                 break;
-            case Direction.Right:
-                directionValue = 2;
+            case MoveDirection.Right:
+                directionValue = 2f;
                 break;
-            case Direction.Up:
-                directionValue = 3;
+            case MoveDirection.Up:
+                directionValue = 3f;
                 break;
         }
 
-        animator.SetInteger("Direction", directionValue);
+        animator.SetFloat("Direction", directionValue);
     }
 
-    Vector2Int GetNextGridPosition(Vector2Int current, Direction direction)
+    Vector2Int GetNextGridPosition(Vector2Int current, MoveDirection direction)
     {
         switch (direction)
         {
-            case Direction.Up: return new Vector2Int(current.x, current.y - 1);
-            case Direction.Down: return new Vector2Int(current.x, current.y + 1);
-            case Direction.Left: return new Vector2Int(current.x - 1, current.y);
-            case Direction.Right: return new Vector2Int(current.x + 1, current.y);
+            case MoveDirection.Up: return new Vector2Int(current.x, current.y - 1);
+            case MoveDirection.Down: return new Vector2Int(current.x, current.y + 1);
+            case MoveDirection.Left: return new Vector2Int(current.x - 1, current.y);
+            case MoveDirection.Right: return new Vector2Int(current.x + 1, current.y);
             default: return current;
         }
     }
@@ -341,8 +342,8 @@ public class GhostController : MonoBehaviour
         transform.rotation = initialRotation;
         currentGridPosition = WorldToGrid(initialPosition);
         targetPosition = initialPosition;
-        currentDirection = Direction.None;
-        previousDirection = Direction.None;
+        currentDirection = MoveDirection.None;
+        previousDirection = MoveDirection.None;
         isLerping = false;
 
         SetState(GameManager.GhostState.Normal);
