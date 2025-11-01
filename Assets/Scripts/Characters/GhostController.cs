@@ -223,6 +223,7 @@ public class GhostController : MonoBehaviour
     }
 
     // Ghost 1 (Red) - FLEE with exploration when safe
+    // When scared/recovering: ALWAYS flee (used by all ghosts)
     MoveDirection DecideGhost1Move(List<MoveDirection> validDirs)
     {
         if (pacStudentTransform == null || validDirs.Count == 0)
@@ -234,14 +235,17 @@ public class GhostController : MonoBehaviour
         Vector3 pacPos = pacStudentTransform.position;
         float distanceToPac = Vector3.Distance(currentPos, pacPos);
 
-        // Mode 1: Active flee when PacStudent is close
-        if (distanceToPac < RED_FLEE_DISTANCE)
+        // When scared/recovering, ALWAYS flee (no patrol mode)
+        bool isScaredState = (currentState == GameManager.GhostState.Scared ||
+                              currentState == GameManager.GhostState.Recovering);
+
+        // Mode 1: Active flee when PacStudent is close OR when scared
+        if (distanceToPac < RED_FLEE_DISTANCE || isScaredState)
         {
             return FleeWithHybridScoring(validDirs, currentPos, pacPos);
         }
 
-        // Mode 2: Patrol/explore when safe distance
-        // Move towards general area but not aggressively
+        // Mode 2: Patrol/explore when safe distance (Red only, when not scared)
         return PatrolAwayFromTarget(validDirs, currentPos, pacPos);
     }
 
