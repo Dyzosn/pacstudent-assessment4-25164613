@@ -15,7 +15,7 @@ public class GhostController : MonoBehaviour
     // Ghost ID (1-4) based on starting position
     private int ghostID;
 
-    // Movement direction enum (renamed to avoid conflict with animator parameter)
+    // Movement direction enum
     private enum MoveDirection
     {
         None,
@@ -43,8 +43,22 @@ public class GhostController : MonoBehaviour
     private GameManager.GhostState currentState = GameManager.GhostState.Normal;
     private bool isDead = false;
 
-    // Grid constants (same as PacStudent)
-    private const float GRID_SIZE = 1f;
+    // Section 2: Spawn area management
+    private bool hasExitedSpawn = false;
+    private bool isInSpawnArea = true;
+    private bool isExitingSpawn = false;
+    private Vector3 spawnExitTarget;
+
+    // Spawn area boundaries (adjusted so exit gaps are outside)
+    private const float SPAWN_LEFT = 12.0f;
+    private const float SPAWN_RIGHT = 16.0f;
+    private const float SPAWN_TOP = -3.0f;    // Above top exit wall
+    private const float SPAWN_BOTTOM = -6.0f; // Above bottom exit wall
+
+    // Exit gap positions (OUTSIDE spawn area)
+    private const float TOP_GAP_Y = -1.5f;    // One tile above exit wall
+    private const float BOTTOM_GAP_Y = -7.5f; // One tile below exit wall
+    private const float GAP_CENTER_X = 14.0f;
 
     void Start()
     {
@@ -62,7 +76,7 @@ public class GhostController : MonoBehaviour
 
         initialRotation = transform.rotation;
 
-        // Determine ghost ID based on X position
+        // Determine ghost ID
         ghostID = DetermineGhostID(initialPosition.x);
 
         // Calculate starting grid position
@@ -70,18 +84,21 @@ public class GhostController : MonoBehaviour
         targetPosition = transform.position;
         currentMoveSpeed = normalMoveSpeed;
 
-        // Find level generator if not assigned
+        // Find level generator
         if (levelGenerator == null)
         {
             levelGenerator = FindFirstObjectByType<LevelGenerator>();
         }
 
-        Debug.Log($"{gameObject.name} (ID: {ghostID}) starting at grid: {currentGridPosition}, world: {transform.position}");
+        // Check if starting in spawn
+        isInSpawnArea = IsInsideSpawnArea(transform.position);
+
+        Debug.Log($"{gameObject.name} (ID: {ghostID}) at {transform.position}, spawn: {initialPosition}");
     }
 
     void Update()
     {
-        // Skip update if game not active
+        // Skip if game not active
         if (GameManager.Instance != null && !GameManager.Instance.IsGameActive())
         {
             return;
@@ -94,72 +111,231 @@ public class GhostController : MonoBehaviour
             currentState = (GameManager.GhostState)animatorState;
         }
 
-        // Perform movement
+        // Update movement speed based on state
+        UpdateMovementSpeed();
+
+        // Dead state: Move to spawn
+        if (isDead)
+        {
+            PerformDeadMovement();
+            return;
+        }
+
+        // Exiting spawn: Special movement
+        if (isExitingSpawn)
+        {
+            PerformSpawnExit();
+            return;
+        }
+
+        // Normal movement
         if (!isLerping)
         {
-            // Lerp finished - decide next move
             DecideNextMove();
         }
         else
         {
-            // Continue lerping
             PerformLerp();
+        }
+
+        // Track spawn area
+        UpdateSpawnAreaStatus();
+    }
+
+    void UpdateMovementSpeed()
+    {
+        // Normal: 90% PacStudent (4.5)
+        // Scared/Recovering/Dead: 50% Normal Ghost Speed (2.25)
+        if (currentState == GameManager.GhostState.Normal)
+        {
+            currentMoveSpeed = normalMoveSpeed; // 4.5
+        }
+        else if (currentState == GameManager.GhostState.Scared ||
+                 currentState == GameManager.GhostState.Recovering ||
+                 currentState == GameManager.GhostState.Dead)
+        {
+            currentMoveSpeed = normalMoveSpeed * 0.5f; // 2.25
         }
     }
 
     int DetermineGhostID(float xPos)
     {
-        // Determine ID based on spawn X position
-        // Red (12.5) = 1, Blue (13.5) = 2, Pink (14.5) = 3, Orange (15.5) = 4
         if (Mathf.Abs(xPos - 12.5f) < 0.1f) return 1;
         if (Mathf.Abs(xPos - 13.5f) < 0.1f) return 2;
         if (Mathf.Abs(xPos - 14.5f) < 0.1f) return 3;
         if (Mathf.Abs(xPos - 15.5f) < 0.1f) return 4;
 
-        Debug.LogWarning($"{gameObject.name} at unexpected position {xPos}, defaulting to ID 1");
+        Debug.LogWarning($"{gameObject.name} at {xPos}, defaulting ID 1");
         return 1;
     }
 
     void DecideNextMove()
     {
-        // Get list of valid directions (no backstep)
+        // If in spawn and not exited yet, start exit
+        if (isInSpawnArea && !hasExitedSpawn && !isExitingSpawn)
+        {
+            StartSpawnExit();
+            return;
+        }
+
+        // Get valid directions
         List<MoveDirection> validDirections = GetValidDirections();
 
         if (validDirections.Count == 0)
         {
-            // No valid moves - stay in place
-            Debug.LogWarning($"{gameObject.name} has no valid moves!");
+            Debug.LogWarning($"{gameObject.name} no valid moves!");
             return;
         }
 
-        // Section 1: Basic random movement for all ghosts (for testing)
+        // Random movement
         MoveDirection nextDirection = validDirections[Random.Range(0, validDirections.Count)];
 
-        // Calculate next grid position
         Vector2Int nextGridPos = GetNextGridPosition(currentGridPosition, nextDirection);
 
-        // Start moving
         previousDirection = currentDirection;
         currentDirection = nextDirection;
         currentGridPosition = nextGridPos;
         StartLerp(GridToWorld(nextGridPos), nextDirection);
     }
 
+    // Dead: Move straight to OWN initialPosition
+    void PerformDeadMovement()
+    {
+        float deadSpeed = normalMoveSpeed * 0.5f;
+
+        Vector3 direction = (initialPosition - transform.position).normalized;
+        transform.position += direction * deadSpeed * Time.deltaTime;
+
+        // Animation facing
+        if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+        {
+            UpdateAnimationDirection(direction.x > 0 ? MoveDirection.Right : MoveDirection.Left);
+        }
+        else
+        {
+            UpdateAnimationDirection(direction.y > 0 ? MoveDirection.Up : MoveDirection.Down);
+        }
+
+        // Check arrival at spawn
+        if (Vector3.Distance(transform.position, initialPosition) < 0.2f)
+        {
+            transform.position = initialPosition;
+            transform.rotation = initialRotation;
+            currentGridPosition = WorldToGrid(initialPosition);
+            targetPosition = initialPosition;
+
+            RespawnAtSpawn();
+        }
+    }
+
+    void StartSpawnExit()
+    {
+        isExitingSpawn = true;
+
+        // Ghost 1&3 = top, Ghost 2&4 = bottom
+        if (ghostID == 1 || ghostID == 3)
+        {
+            spawnExitTarget = new Vector3(GAP_CENTER_X, TOP_GAP_Y, 0f);
+        }
+        else
+        {
+            spawnExitTarget = new Vector3(GAP_CENTER_X, BOTTOM_GAP_Y, 0f);
+        }
+
+        Debug.Log($"{gameObject.name} exiting to {spawnExitTarget}");
+    }
+
+    void PerformSpawnExit()
+    {
+        Vector3 direction = (spawnExitTarget - transform.position).normalized;
+        float exitSpeed = normalMoveSpeed * 0.5f;
+
+        transform.position += direction * exitSpeed * Time.deltaTime;
+
+        // Animation
+        if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+        {
+            UpdateAnimationDirection(direction.x > 0 ? MoveDirection.Right : MoveDirection.Left);
+        }
+        else
+        {
+            UpdateAnimationDirection(direction.y > 0 ? MoveDirection.Up : MoveDirection.Down);
+        }
+
+        // Check if exited
+        if (!IsInsideSpawnArea(transform.position))
+        {
+            isExitingSpawn = false;
+            hasExitedSpawn = true;
+            isInSpawnArea = false;
+
+            // Snap to grid
+            currentGridPosition = WorldToGrid(transform.position);
+            targetPosition = GridToWorld(currentGridPosition);
+            transform.position = targetPosition;
+
+            Debug.Log($"{gameObject.name} exited spawn");
+        }
+    }
+
+    void RespawnAtSpawn()
+    {
+        isDead = false;
+        isInSpawnArea = true;
+        hasExitedSpawn = false;
+        isExitingSpawn = false;
+
+        // Notify GameManager
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnGhostRespawn();
+        }
+
+        // Determine state based on scared timer
+        GameManager.GhostState newState = GameManager.GhostState.Normal;
+
+        if (GameManager.Instance != null && GameManager.Instance.IsGhostScaredActive())
+        {
+            float timeLeft = GameManager.Instance.GetGhostScaredTimeRemaining();
+            newState = timeLeft > 3f ? GameManager.GhostState.Scared : GameManager.GhostState.Recovering;
+        }
+
+        SetState(newState);
+
+        Debug.Log($"{gameObject.name} respawned as {newState}");
+    }
+
+    bool IsInsideSpawnArea(Vector3 pos)
+    {
+        return pos.x >= SPAWN_LEFT && pos.x <= SPAWN_RIGHT &&
+               pos.y >= SPAWN_BOTTOM && pos.y <= SPAWN_TOP;
+    }
+
+    void UpdateSpawnAreaStatus()
+    {
+        isInSpawnArea = IsInsideSpawnArea(transform.position);
+    }
+
     List<MoveDirection> GetValidDirections()
     {
         List<MoveDirection> validDirs = new List<MoveDirection>();
 
-        // Check all four directions
         foreach (MoveDirection dir in new MoveDirection[] { MoveDirection.Up, MoveDirection.Down, MoveDirection.Left, MoveDirection.Right })
         {
-            // Skip backstep (opposite of previous direction)
+            // No backstep
             if (IsOppositeDirection(dir, previousDirection))
             {
-                // Only allow backstep if it's the ONLY option (handled later)
                 continue;
             }
 
             Vector2Int nextPos = GetNextGridPosition(currentGridPosition, dir);
+
+            // Prevent re-entry to spawn (unless dead)
+            Vector3 nextWorldPos = GridToWorld(nextPos);
+            if (!isDead && hasExitedSpawn && IsInsideSpawnArea(nextWorldPos))
+            {
+                continue;
+            }
 
             if (IsWalkable(nextPos))
             {
@@ -167,15 +343,19 @@ public class GhostController : MonoBehaviour
             }
         }
 
-        // If no valid directions (cornered), allow backstep
+        // Allow backstep if cornered
         if (validDirs.Count == 0)
         {
             MoveDirection oppositeDir = GetOppositeDirection(previousDirection);
             Vector2Int backPos = GetNextGridPosition(currentGridPosition, oppositeDir);
 
-            if (IsWalkable(backPos))
+            Vector3 backWorldPos = GridToWorld(backPos);
+            if (isDead || !hasExitedSpawn || !IsInsideSpawnArea(backWorldPos))
             {
-                validDirs.Add(oppositeDir);
+                if (IsWalkable(backPos))
+                {
+                    validDirs.Add(oppositeDir);
+                }
             }
         }
 
@@ -209,7 +389,6 @@ public class GhostController : MonoBehaviour
         isLerping = true;
         lerpProgress = 0f;
 
-        // Update animator direction
         UpdateAnimationDirection(direction);
     }
 
@@ -220,7 +399,6 @@ public class GhostController : MonoBehaviour
 
         if (lerpProgress >= 1f)
         {
-            // Lerp complete - snap to target
             transform.position = targetPosition;
             isLerping = false;
             lerpProgress = 0f;
@@ -231,24 +409,14 @@ public class GhostController : MonoBehaviour
     {
         if (animator == null) return;
 
-        // Set Direction parameter (0=Down, 1=Left, 2=Right, 3=Up)
-        // Blend Tree parameters must be Float, not Int!
         float directionValue = 0f;
 
         switch (dir)
         {
-            case MoveDirection.Down:
-                directionValue = 0f;
-                break;
-            case MoveDirection.Left:
-                directionValue = 1f;
-                break;
-            case MoveDirection.Right:
-                directionValue = 2f;
-                break;
-            case MoveDirection.Up:
-                directionValue = 3f;
-                break;
+            case MoveDirection.Down: directionValue = 0f; break;
+            case MoveDirection.Left: directionValue = 1f; break;
+            case MoveDirection.Right: directionValue = 2f; break;
+            case MoveDirection.Up: directionValue = 3f; break;
         }
 
         animator.SetFloat("Direction", directionValue);
@@ -277,7 +445,7 @@ public class GhostController : MonoBehaviour
         int mappedX = gridPos.x;
         int mappedY = gridPos.y;
 
-        // Mirror logic for full map
+        // Mirror logic
         if (gridPos.x >= cols)
         {
             mappedX = (cols * 2 - 1) - gridPos.x;
@@ -296,7 +464,15 @@ public class GhostController : MonoBehaviour
 
         int tileType = levelMap[mappedY, mappedX];
 
-        // Walkable tiles: 0=empty corridor, 5=pellet, 6=power pellet
+        // Tile 8 (ghost exit wall) has special rules:
+        // - Only walkable when exiting spawn OR dead (returning to spawn)
+        // - After exiting, becomes a wall (cannot step on door)
+        if (tileType == 8)
+        {
+            return isExitingSpawn || isDead;
+        }
+
+        // Normal walkable tiles: 0=empty, 5=pellet, 6=power pellet
         return tileType == 0 || tileType == 5 || tileType == 6;
     }
 
@@ -314,12 +490,12 @@ public class GhostController : MonoBehaviour
         return new Vector3(worldX, worldY, 0f);
     }
 
-    // Phase 70% methods (keep for compatibility)
     public void Die()
     {
-        // Ghost eaten by PacStudent
+        // Eaten by PacStudent - enter dead state immediately
         isDead = true;
         currentState = GameManager.GhostState.Dead;
+        isLerping = false;
 
         if (animator != null)
         {
@@ -331,12 +507,12 @@ public class GhostController : MonoBehaviour
             GameManager.Instance.OnGhostDeath();
         }
 
-        Debug.Log($"{gameObject.name} died!");
+        Debug.Log($"{gameObject.name} died! Returning to {initialPosition}");
     }
 
     public void ResetToInitialPosition()
     {
-        // Called when PacStudent dies - reset immediately
+        // PacStudent dies - reset all ghosts
         isDead = false;
         transform.position = initialPosition;
         transform.rotation = initialRotation;
@@ -346,9 +522,14 @@ public class GhostController : MonoBehaviour
         previousDirection = MoveDirection.None;
         isLerping = false;
 
+        // Reset spawn flags
+        hasExitedSpawn = false;
+        isInSpawnArea = true;
+        isExitingSpawn = false;
+
         SetState(GameManager.GhostState.Normal);
 
-        Debug.Log($"{gameObject.name} reset to initial position");
+        Debug.Log($"{gameObject.name} reset");
     }
 
     void SetState(GameManager.GhostState newState)
