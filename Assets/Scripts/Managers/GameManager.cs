@@ -35,8 +35,9 @@ public class GameManager : MonoBehaviour
     [Header("Ghost Management")]
     [SerializeField] private AudioController audioController;
 
-    // PlayerPrefs key for high score
-    private const string HIGH_SCORE_KEY = "HighScore";
+    // PlayerPrefs keys for high score and best time
+    private const string HIGH_SCORE_KEY = "Level1_HighScore";
+    private const string BEST_TIME_KEY = "Level1_BestTime";
 
     // Ghost state enum
     public enum GhostState
@@ -57,6 +58,7 @@ public class GameManager : MonoBehaviour
     private GameObject[] allGhosts;
     private int deadGhostCount = 0;
     private int highScore = 0;
+    private float bestTime = 0f;
 
     void Awake()
     {
@@ -96,7 +98,7 @@ public class GameManager : MonoBehaviour
             gameOverPanel.SetActive(false);
         }
 
-        // Load high score from PlayerPrefs
+        // Load high score and best time from PlayerPrefs
         LoadHighScore();
 
         UpdateUI();
@@ -395,16 +397,22 @@ public class GameManager : MonoBehaviour
     {
         isGameActive = false;
 
-        // Check and save high score
-        if (currentScore > highScore)
+        // Check if this is a new high score or better time
+        bool isNewRecord = false;
+        if (currentScore > highScore || (currentScore == highScore && gameTime < bestTime))
         {
             highScore = currentScore;
+            bestTime = gameTime;
             SaveHighScore();
-            Debug.Log($"New high score! {highScore}");
+            isNewRecord = true;
+            Debug.Log($"New record! Score: {highScore}, Time: {bestTime:F2}s");
         }
 
         // Show game over screen
         ShowGameOverScreen();
+
+        // Automatically return to Start Scene after 3 seconds
+        StartCoroutine(ReturnToStartSceneAfterDelay(3f));
 
         Debug.Log($"Game Over! Final Score: {currentScore}, Time: {gameTime:F2}s");
     }
@@ -431,28 +439,48 @@ public class GameManager : MonoBehaviour
             finalTimeText.text = $"Time: {minutes:D2}:{seconds:D2}:{milliseconds:D2}";
         }
 
-        // Update high score text
+        // Update high score text with best time
         if (highScoreText != null)
         {
-            highScoreText.text = $"High Score: {highScore.ToString("D6")}";
+            int minutes = Mathf.FloorToInt(bestTime / 60f);
+            int seconds = Mathf.FloorToInt(bestTime % 60f);
+            int milliseconds = Mathf.FloorToInt((bestTime * 100f) % 100f);
+            string formattedTime = $"{minutes:D2}:{seconds:D2}:{milliseconds:D2}";
+
+            highScoreText.text = $"High Score: {highScore.ToString("D6")}\nTime: {formattedTime}";
         }
 
         Debug.Log("Game Over screen displayed");
     }
 
+    IEnumerator ReturnToStartSceneAfterDelay(float delay)
+    {
+        // Wait for specified delay (3 seconds)
+        yield return new WaitForSeconds(delay);
+
+        // Load Start Scene
+        UnityEngine.SceneManagement.SceneManager.LoadScene("StartScene");
+
+        Debug.Log("Returning to Start Scene after game over");
+    }
+
     void LoadHighScore()
     {
-        // Load high score from PlayerPrefs (default to 0 if not found)
+        // Load high score and best time from PlayerPrefs
         highScore = PlayerPrefs.GetInt(HIGH_SCORE_KEY, 0);
-        Debug.Log($"Loaded high score: {highScore}");
+        bestTime = PlayerPrefs.GetFloat(BEST_TIME_KEY, 0f);
+
+        Debug.Log($"Loaded high score: {highScore}, best time: {bestTime:F2}s");
     }
 
     void SaveHighScore()
     {
-        // Save high score to PlayerPrefs
+        // Save high score and best time to PlayerPrefs
         PlayerPrefs.SetInt(HIGH_SCORE_KEY, highScore);
+        PlayerPrefs.SetFloat(BEST_TIME_KEY, bestTime);
         PlayerPrefs.Save(); // Force save to disk
-        Debug.Log($"Saved high score: {highScore}");
+
+        Debug.Log($"Saved high score: {highScore}, best time: {bestTime:F2}s");
     }
 
     void UpdateUI()
